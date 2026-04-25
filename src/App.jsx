@@ -220,78 +220,119 @@ async function fetchCandles(sym, key, rangeObj) {
 function LWChart({ data, showMA50, showMA200, chartType, isUp }) {
   const containerRef = useRef(null);
   const chartRef = useRef(null);
-  const seriesRef = useRef(null);
-  const ma50Ref = useRef(null);
-  const ma200Ref = useRef(null);
+  const [lwReady, setLwReady] = useState(!!window.LightweightCharts);
+  const [lwError, setLwError] = useState(null);
+
+  // Wait for LW Charts script to load
+  useEffect(() => {
+    if (window.LightweightCharts) { setLwReady(true); return; }
+    const check = setInterval(() => {
+      if (window.LightweightCharts) { setLwReady(true); clearInterval(check); }
+    }, 200);
+    const timeout = setTimeout(() => {
+      clearInterval(check);
+      setLwError("Chart library failed to load");
+    }, 10000);
+    return () => { clearInterval(check); clearTimeout(timeout); };
+  }, []);
 
   useEffect(() => {
-    if (!window.LightweightCharts || !containerRef.current || !data?.length) return;
+    if (!lwReady || !containerRef.current || !data?.length) return;
 
-    // Cleanup previous
-    if (chartRef.current) { chartRef.current.remove(); chartRef.current = null; }
-
-    const chart = window.LightweightCharts.createChart(containerRef.current, {
-      width: containerRef.current.clientWidth,
-      height: 340,
-      layout: { background: { color: "transparent" }, textColor: "#5a5a70" },
-      grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
-      crosshair: { mode: window.LightweightCharts.CrosshairMode.Normal },
-      rightPriceScale: { borderColor: "rgba(255,255,255,0.07)", textColor: "#5a5a70" },
-      timeScale: { borderColor: "rgba(255,255,255,0.07)", textColor: "#5a5a70", timeVisible: false },
-      handleScroll: true,
-      handleScale: true,
-    });
-    chartRef.current = chart;
-
-    const upColor = "#2db84d";
-    const downColor = "#e8352a";
-
-    if (chartType === "candle") {
-      const series = chart.addCandlestickSeries({
-        upColor, downColor,
-        borderUpColor: upColor, borderDownColor: downColor,
-        wickUpColor: upColor, wickDownColor: downColor,
-      });
-      const candles = data.map(d => ({ time: d.ts, open: d.open, high: d.high, low: d.low, close: d.close })).filter(d => d.open && d.high && d.low && d.close);
-      series.setData(candles);
-      seriesRef.current = series;
-    } else {
-      const series = chart.addAreaSeries({
-        lineColor: isUp ? upColor : downColor,
-        topColor: isUp ? "rgba(45,184,77,0.15)" : "rgba(232,53,42,0.15)",
-        bottomColor: "rgba(0,0,0,0)",
-        lineWidth: 2,
-      });
-      series.setData(data.map(d => ({ time: d.ts, value: d.close })));
-      seriesRef.current = series;
-    }
-
-    // MA50
-    if (showMA50) {
-      const ma50 = chart.addLineSeries({ color: "#f0a030", lineWidth: 1.5, lineStyle: 1 });
-      ma50.setData(data.filter(d => d.ma50).map(d => ({ time: d.ts, value: d.ma50 })));
-      ma50Ref.current = ma50;
-    }
-
-    // MA200
-    if (showMA200) {
-      const ma200 = chart.addLineSeries({ color: "#3b8eea", lineWidth: 1.5, lineStyle: 1 });
-      ma200.setData(data.filter(d => d.ma200).map(d => ({ time: d.ts, value: d.ma200 })));
-      ma200Ref.current = ma200;
-    }
-
-    chart.timeScale().fitContent();
-
-    const handleResize = () => {
-      if (containerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+    try {
+      // Cleanup previous chart
+      if (chartRef.current) {
+        try { chartRef.current.remove(); } catch(e) {}
+        chartRef.current = null;
       }
-    };
-    window.addEventListener("resize", handleResize);
-    return () => { window.removeEventListener("resize", handleResize); };
-  }, [data, showMA50, showMA200, chartType, isUp]);
 
-  return <div ref={containerRef} className="chart-container" />;
+      const LWC = window.LightweightCharts;
+      const chart = LWC.createChart(containerRef.current, {
+        width: containerRef.current.clientWidth,
+        height: 320,
+        layout: { background: { color: "transparent" }, textColor: "#5a5a70" },
+        grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
+        crosshair: { mode: LWC.CrosshairMode ? LWC.CrosshairMode.Normal : 1 },
+        rightPriceScale: { borderColor: "rgba(255,255,255,0.07)" },
+        timeScale: { borderColor: "rgba(255,255,255,0.07)", timeVisible: false, secondsVisible: false },
+        handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true },
+        handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+      });
+      chartRef.current = chart;
+
+      const upColor = "#2db84d";
+      const downColor = "#e8352a";
+
+      // Sort data by timestamp
+      const sorted = [...data].sort((a, b) => a.ts - b.ts);
+
+      if (chartType === "candle") {
+        const series = chart.addCandlestickSeries({
+          upColor, downColor,
+          borderUpColor: upColor, borderDownColor: downColor,
+          wickUpColor: upColor, wickDownColor: downColor,
+        });
+        const candles = sorted
+          .filter(d => d.open != null && d.high != null && d.low != null && d.close != null)
+          .map(d => ({ time: d.ts, open: d.open, high: d.high, low: d.low, close: d.close }));
+        if (candles.length) series.setData(candles);
+      } else {
+        const series = chart.addAreaSeries({
+          lineColor: isUp ? upColor : downColor,
+          topColor: isUp ? "rgba(45,184,77,0.12)" : "rgba(232,53,42,0.12)",
+          bottomColor: "rgba(0,0,0,0)",
+          lineWidth: 2,
+        });
+        const pts = sorted.filter(d => d.close != null).map(d => ({ time: d.ts, value: d.close }));
+        if (pts.length) series.setData(pts);
+      }
+
+      if (showMA50) {
+        const s = chart.addLineSeries({ color: "#f0a030", lineWidth: 1.5, lineStyle: 2 });
+        const pts = sorted.filter(d => d.ma50 != null).map(d => ({ time: d.ts, value: d.ma50 }));
+        if (pts.length) s.setData(pts);
+      }
+
+      if (showMA200) {
+        const s = chart.addLineSeries({ color: "#3b8eea", lineWidth: 1.5, lineStyle: 2 });
+        const pts = sorted.filter(d => d.ma200 != null).map(d => ({ time: d.ts, value: d.ma200 }));
+        if (pts.length) s.setData(pts);
+      }
+
+      chart.timeScale().fitContent();
+
+      const handleResize = () => {
+        if (containerRef.current && chartRef.current) {
+          try { chartRef.current.applyOptions({ width: containerRef.current.clientWidth }); } catch(e) {}
+        }
+      };
+      window.addEventListener("resize", handleResize);
+      return () => {
+        window.removeEventListener("resize", handleResize);
+        if (chartRef.current) {
+          try { chartRef.current.remove(); } catch(e) {}
+          chartRef.current = null;
+        }
+      };
+    } catch(e) {
+      console.error("Chart error:", e);
+      setLwError("Chart render failed: " + e.message);
+    }
+  }, [lwReady, data, showMA50, showMA200, chartType, isUp]);
+
+  if (lwError) return (
+    <div style={{height:320,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--amber)",fontSize:13}}>
+      ⚠ {lwError}
+    </div>
+  );
+
+  if (!lwReady) return (
+    <div style={{height:320,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div className="spinner"/>
+    </div>
+  );
+
+  return <div ref={containerRef} className="chart-container" style={{height:320}} />;
 }
 
 
