@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { ComposedChart, Bar, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const css = `
   @import url('https://fonts.cdnfonts.com/css/satoshi');
