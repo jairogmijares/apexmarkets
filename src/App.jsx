@@ -179,7 +179,7 @@ async function fetchStock(sym, key) {
 
   if (!quote || quote.c === 0) throw new Error("Ticker not found");
 
-  // Fetch chart data from Yahoo Finance (free, no auth)
+  // Fetch chart data — use 3mo range with 280 day warmup for MAs
   let priceHistory = [];
   try {
     const res = await fetch(`/api/chart?symbol=${sym}&interval=1d&range=3mo`);
@@ -190,11 +190,27 @@ async function fetchStock(sym, key) {
         const ts = result.timestamp || [];
         const closes = result.indicators?.quote?.[0]?.close || [];
         const volumes = result.indicators?.quote?.[0]?.volume || [];
-        priceHistory = ts.map((t, i) => ({
+        const allPts = ts.map((t, i) => ({
           date: new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
           close: closes[i] ? +closes[i].toFixed(2) : null,
           volume: volumes[i] || 0,
+          ts: t,
         })).filter(p => p.close !== null);
+
+        // Compute MAs on all data including warmup
+        const allCloses = allPts.map(p => p.close);
+        const withMA = allPts.map((p, i) => {
+          const sl = allCloses.slice(0, i + 1);
+          return {
+            ...p,
+            ma50: sl.length >= 50 ? +(sl.slice(-50).reduce((a,b)=>a+b,0)/50).toFixed(2) : null,
+            ma200: sl.length >= 200 ? +(sl.slice(-200).reduce((a,b)=>a+b,0)/200).toFixed(2) : null,
+          };
+        });
+
+        // Only display last 3 months
+        const cutoff = Date.now()/1000 - 90 * 86400;
+        priceHistory = withMA.filter(p => p.ts >= cutoff);
       }
     }
   } catch(e) { console.warn("Chart:", e.message); }
@@ -203,31 +219,51 @@ async function fetchStock(sym, key) {
 }
 
 async function fetchCandles(sym, key, rangeObj) {
-  // Use Yahoo Finance for historical data (free, no auth needed)
   const intervalMap = {
-    "1M": "1d", "3M": "1d", "6M": "1d", "1Y": "1wk", "2Y": "1wk", "5Y": "1mo"
+    "1M": "1d", "3M": "1d", "6M": "1d", "1Y": "1d", "2Y": "1wk", "5Y": "1mo"
   };
   const rangeMap = {
     "1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "2Y": "2y", "5Y": "5y"
   };
   const interval = intervalMap[rangeObj.label] || "1d";
   const range = rangeMap[rangeObj.label] || "3mo";
+
+  // API fetches extra 280 days for MA warmup
   const res = await fetch(`/api/chart?symbol=${sym}&interval=${interval}&range=${range}`);
-  if (!res.ok) throw new Error("Yahoo Finance error " + res.status);
+  if (!res.ok) throw new Error("Chart error " + res.status);
   const data = await res.json();
   const result = data?.chart?.result?.[0];
   if (!result) return [];
+
   const ts = result.timestamp || [];
   const closes = result.indicators?.quote?.[0]?.close || [];
   const volumes = result.indicators?.quote?.[0]?.volume || [];
-  return ts.map((t, i) => ({
+
+  // Parse all points (including warmup data for MA calc)
+  const allPts = ts.map((t, i) => ({
     date: new Date(t * 1000).toLocaleDateString("en-US", {
       month: "short", day: "numeric",
       year: rangeObj.days > 365 ? "2-digit" : undefined
     }),
     close: closes[i] ? +closes[i].toFixed(2) : null,
     volume: volumes[i] || 0,
+    ts: t,
   })).filter(p => p.close !== null);
+
+  // Compute MAs across ALL points (including warmup)
+  const allCloses = allPts.map(p => p.close);
+  const withMA = allPts.map((p, i) => {
+    const sl = allCloses.slice(0, i + 1);
+    return {
+      ...p,
+      ma50: sl.length >= 50 ? +(sl.slice(-50).reduce((a,b)=>a+b,0)/50).toFixed(2) : null,
+      ma200: sl.length >= 200 ? +(sl.slice(-200).reduce((a,b)=>a+b,0)/200).toFixed(2) : null,
+    };
+  });
+
+  // Trim to only show the requested range for display
+  const cutoff = Date.now()/1000 - rangeObj.days * 86400;
+  return withMA.filter(p => p.ts >= cutoff);
 }
 
 const ChartTip = ({active,payload,label}) => {
@@ -369,17 +405,7 @@ export default function App() {
   const isUp = (change||0) >= 0;
   const lineColor = isUp ? "#2db84d" : "#e8352a";
 
-  const chartData = (() => {
-    const ca = chartHistory.map(p=>p.close);
-    return chartHistory.map((p,i)=>{
-      const sl = ca.slice(0,i+1);
-      return {
-        ...p,
-        ma50: sl.length>=50 ? +(sl.slice(-50).reduce((a,b)=>a+b,0)/50).toFixed(2) : null,
-        ma200: sl.length>=200 ? +(sl.slice(-200).reduce((a,b)=>a+b,0)/200).toFixed(2) : null,
-      };
-    });
-  })();
+  const chartData = chartHistory; // MAs pre-computed in fetch
 
   const closes = chartData.map(d=>d.close);
   const volumes = chartData.map(d=>d.volume||0);
