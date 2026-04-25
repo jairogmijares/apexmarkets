@@ -179,38 +179,57 @@ async function fetchStock(sym, key) {
 
   if (!quote || quote.c === 0) throw new Error("Ticker not found");
 
-  await new Promise(r => setTimeout(r, 500));
-
-  const to = Math.floor(Date.now()/1000);
-  const from = to - 180*86400;
+  // Fetch chart data from Yahoo Finance (free, no auth)
   let priceHistory = [];
   try {
-    const candles = await finnhub(`/stock/candle?symbol=${sym}&resolution=D&from=${from}&to=${to}`, key);
-    if (candles?.s === "ok" && candles.t?.length > 0) {
-      priceHistory = candles.t.map((t,i) => ({
-        date: new Date(t*1000).toLocaleDateString("en-US",{month:"short",day:"numeric"}),
-        close: +candles.c[i].toFixed(2),
-        volume: candles.v?.[i] || 0,
-      }));
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=3mo`;
+    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    if (res.ok) {
+      const data = await res.json();
+      const result = data?.chart?.result?.[0];
+      if (result) {
+        const ts = result.timestamp || [];
+        const closes = result.indicators?.quote?.[0]?.close || [];
+        const volumes = result.indicators?.quote?.[0]?.volume || [];
+        priceHistory = ts.map((t, i) => ({
+          date: new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          close: closes[i] ? +closes[i].toFixed(2) : null,
+          volume: volumes[i] || 0,
+        })).filter(p => p.close !== null);
+      }
     }
-  } catch(e) { console.warn("Candles:", e.message); }
+  } catch(e) { console.warn("Chart:", e.message); }
 
   return { quote, profile, metrics: metrics?.metric || {}, priceHistory };
 }
 
 async function fetchCandles(sym, key, rangeObj) {
-  const to = Math.floor(Date.now()/1000);
-  const from = to - rangeObj.days*86400;
-  const data = await finnhub(`/stock/candle?symbol=${sym}&resolution=${rangeObj.res}&from=${from}&to=${to}`, key);
-  if (!data || data.s !== "ok") return [];
-  return data.t.map((t,i) => ({
-    date: new Date(t*1000).toLocaleDateString("en-US",{
-      month:"short", day:"numeric",
+  // Use Yahoo Finance for historical data (free, no auth needed)
+  const intervalMap = {
+    "1M": "1d", "3M": "1d", "6M": "1d", "1Y": "1wk", "2Y": "1wk", "5Y": "1mo"
+  };
+  const rangeMap = {
+    "1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "2Y": "2y", "5Y": "5y"
+  };
+  const interval = intervalMap[rangeObj.label] || "1d";
+  const range = rangeMap[rangeObj.label] || "3mo";
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`;
+  const res = await fetch(url, { headers: { "Accept": "application/json" } });
+  if (!res.ok) throw new Error("Yahoo Finance error " + res.status);
+  const data = await res.json();
+  const result = data?.chart?.result?.[0];
+  if (!result) return [];
+  const ts = result.timestamp || [];
+  const closes = result.indicators?.quote?.[0]?.close || [];
+  const volumes = result.indicators?.quote?.[0]?.volume || [];
+  return ts.map((t, i) => ({
+    date: new Date(t * 1000).toLocaleDateString("en-US", {
+      month: "short", day: "numeric",
       year: rangeObj.days > 365 ? "2-digit" : undefined
     }),
-    close: +data.c[i].toFixed(2),
-    volume: data.v?.[i] || 0,
-  }));
+    close: closes[i] ? +closes[i].toFixed(2) : null,
+    volume: volumes[i] || 0,
+  })).filter(p => p.close !== null);
 }
 
 const ChartTip = ({active,payload,label}) => {
