@@ -182,8 +182,8 @@ async function fetchStock(sym, key) {
   // Fetch chart data from Yahoo Finance (free, no auth)
   let priceHistory = [];
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=3mo`;
-    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=3mo`;
+    const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`);
     if (res.ok) {
       const data = await res.json();
       const result = data?.chart?.result?.[0];
