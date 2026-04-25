@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const css = `
   @import url('https://fonts.cdnfonts.com/css/satoshi');
@@ -69,6 +68,11 @@ const css = `
   .ohlc-lbl { font-size: 10px; font-weight: 600; color: var(--tertiary); letter-spacing: 1px; text-transform: uppercase; }
   .ohlc-val { font-size: 14px; font-weight: 500; color: var(--text); }
   .chart-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .chart-container { position: relative; width: 100%; height: 340px; border-radius: 10px; overflow: hidden; }
+  .chart-type-group { display: flex; gap: 4px; }
+  .chart-type-btn { font-size: 11px; font-weight: 600; color: var(--secondary); padding: 4px 10px; border-radius: 6px; border: 1.5px solid var(--border-strong); background: transparent; font-family: var(--font); cursor: pointer; transition: all 0.14s; letter-spacing: 0.5px; }
+  .chart-type-btn.active { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+  .chart-zoom-hint { font-size: 11px; color: var(--tertiary); text-align: right; margin-top: 6px; }
   .range-group { display: flex; gap: 3px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 3px; }
   .range-btn { font-size: 12px; font-weight: 500; color: var(--secondary); padding: 5px 11px; border-radius: 6px; cursor: pointer; border: none; background: transparent; font-family: var(--font); transition: all 0.14s; }
   .range-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
@@ -105,6 +109,13 @@ const css = `
   .spin-label { font-size: 13px; color: var(--tertiary); font-weight: 500; }
   @keyframes spin{to{transform:rotate(360deg)}}
   .err-bar { background: var(--red-bg); color: var(--red); border-radius: var(--radius-sm); padding: 12px 18px; font-size: 13px; font-weight: 500; margin-bottom: 12px; }
+  .chart-mode-btn { font-size: 12px; font-weight: 500; color: var(--secondary); padding: 5px 12px; border-radius: 6px; border: 1.5px solid var(--border-strong); background: transparent; font-family: var(--font); cursor: pointer; transition: all 0.14s; }
+  .chart-mode-btn.active { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+  .chart-wrap { position: relative; user-select: none; touch-action: pan-y; }
+  .zoom-controls { display: flex; gap: 6px; align-items: center; }
+  .zoom-btn { font-size: 14px; font-weight: 600; color: var(--secondary); padding: 3px 10px; border-radius: 6px; border: 1.5px solid var(--border-strong); background: transparent; cursor: pointer; transition: all 0.14s; line-height: 1; }
+  .zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .candle-svg { overflow: visible; }
   .fade { animation: fadeUp 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both; }
   .d0{animation-delay:0s} .d1{animation-delay:.06s} .d2{animation-delay:.12s} .d3{animation-delay:.18s} .d4{animation-delay:.24s}
   @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
@@ -205,17 +216,214 @@ async function fetchCandles(sym, key, rangeObj) {
   return [];
 }
 
-const ChartTip = ({active,payload,label}) => {
-  if (!active||!payload?.length) return null;
+// Lightweight Charts component using TradingView library via CDN
+function LWChart({ data, showMA50, showMA200, chartType, isUp }) {
+  const containerRef = useRef(null);
+  const chartRef = useRef(null);
+  const seriesRef = useRef(null);
+  const ma50Ref = useRef(null);
+  const ma200Ref = useRef(null);
+
+  useEffect(() => {
+    if (!window.LightweightCharts || !containerRef.current || !data?.length) return;
+
+    // Cleanup previous
+    if (chartRef.current) { chartRef.current.remove(); chartRef.current = null; }
+
+    const chart = window.LightweightCharts.createChart(containerRef.current, {
+      width: containerRef.current.clientWidth,
+      height: 340,
+      layout: { background: { color: "transparent" }, textColor: "#5a5a70" },
+      grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
+      crosshair: { mode: window.LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: "rgba(255,255,255,0.07)", textColor: "#5a5a70" },
+      timeScale: { borderColor: "rgba(255,255,255,0.07)", textColor: "#5a5a70", timeVisible: false },
+      handleScroll: true,
+      handleScale: true,
+    });
+    chartRef.current = chart;
+
+    const upColor = "#2db84d";
+    const downColor = "#e8352a";
+
+    if (chartType === "candle") {
+      const series = chart.addCandlestickSeries({
+        upColor, downColor,
+        borderUpColor: upColor, borderDownColor: downColor,
+        wickUpColor: upColor, wickDownColor: downColor,
+      });
+      const candles = data.map(d => ({ time: d.ts, open: d.open, high: d.high, low: d.low, close: d.close })).filter(d => d.open && d.high && d.low && d.close);
+      series.setData(candles);
+      seriesRef.current = series;
+    } else {
+      const series = chart.addAreaSeries({
+        lineColor: isUp ? upColor : downColor,
+        topColor: isUp ? "rgba(45,184,77,0.15)" : "rgba(232,53,42,0.15)",
+        bottomColor: "rgba(0,0,0,0)",
+        lineWidth: 2,
+      });
+      series.setData(data.map(d => ({ time: d.ts, value: d.close })));
+      seriesRef.current = series;
+    }
+
+    // MA50
+    if (showMA50) {
+      const ma50 = chart.addLineSeries({ color: "#f0a030", lineWidth: 1.5, lineStyle: 1 });
+      ma50.setData(data.filter(d => d.ma50).map(d => ({ time: d.ts, value: d.ma50 })));
+      ma50Ref.current = ma50;
+    }
+
+    // MA200
+    if (showMA200) {
+      const ma200 = chart.addLineSeries({ color: "#3b8eea", lineWidth: 1.5, lineStyle: 1 });
+      ma200.setData(data.filter(d => d.ma200).map(d => ({ time: d.ts, value: d.ma200 })));
+      ma200Ref.current = ma200;
+    }
+
+    chart.timeScale().fitContent();
+
+    const handleResize = () => {
+      if (containerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => { window.removeEventListener("resize", handleResize); };
+  }, [data, showMA50, showMA200, chartType, isUp]);
+
+  return <div ref={containerRef} className="chart-container" />;
+}
+
+
+function CandleChart({ data, mode, isUp, showMA50, showMA200, priceMin, priceMax }) {
+  const [tooltip, setTooltip] = useState(null);
+  const svgRef = useRef(null);
+
+  if (!data || data.length === 0) return <div style={{height:240,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--tertiary)",fontSize:13}}>No data</div>;
+
+  const W = 900, H = 240, PAD_L = 52, PAD_R = 8, PAD_T = 8, PAD_B = 24;
+  const chartW = W - PAD_L - PAD_R;
+  const chartH = H - PAD_T - PAD_B;
+
+  const allVals = data.flatMap(d => [d.high||d.close, d.low||d.close, d.ma50, d.ma200].filter(Boolean));
+  const minVal = Math.min(...allVals) * 0.997;
+  const maxVal = Math.max(...allVals) * 1.003;
+  const range = maxVal - minVal || 1;
+
+  const toY = v => PAD_T + chartH - ((v - minVal) / range) * chartH;
+  const toX = i => PAD_L + (i / (data.length - 1 || 1)) * chartW;
+
+  const candleW = Math.max(2, Math.min(12, chartW / data.length - 2));
+
+  // Price line path
+  const linePath = data.map((d,i) => `${i===0?"M":"L"}${toX(i).toFixed(1)},${toY(d.close).toFixed(1)}`).join(" ");
+  const areaPath = linePath + ` L${toX(data.length-1).toFixed(1)},${(PAD_T+chartH).toFixed(1)} L${PAD_L},${(PAD_T+chartH).toFixed(1)} Z`;
+
+  // MA paths
+  const maPath = (key) => data.map((d,i) => d[key] ? `${(!data.slice(0,i).find(p=>p[key])?"M":"L")}${toX(i).toFixed(1)},${toY(d[key]).toFixed(1)}` : "").filter(Boolean).join(" ");
+
+  // Y axis ticks
+  const yTicks = 5;
+  const yTickVals = Array.from({length:yTicks}, (_,i) => minVal + (range * i / (yTicks-1)));
+
+  // X axis ticks — show ~6 evenly spaced
+  const xTickCount = Math.min(6, data.length);
+  const xTickIdxs = Array.from({length:xTickCount}, (_,i) => Math.floor(i * (data.length-1) / (xTickCount-1)));
+
+  const lineColor = isUp ? "#2db84d" : "#e8352a";
+
   return (
-    <div className="ct">
-      <div className="ct-date">{label}</div>
-      {payload.filter(p=>["close","ma50","ma200"].includes(p.dataKey)).map((p,i)=>(
-        <div key={i} className="ct-val" style={{color:p.color}}>{p.name}: ${Number(p.value).toFixed(2)}</div>
-      ))}
+    <div style={{position:"relative"}} onMouseLeave={()=>setTooltip(null)}>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        style={{width:"100%",height:240,overflow:"visible"}}
+        onMouseMove={e => {
+          const rect = svgRef.current?.getBoundingClientRect();
+          if (!rect) return;
+          const mx = (e.clientX - rect.left) / rect.width * W;
+          const idx = Math.round((mx - PAD_L) / chartW * (data.length - 1));
+          if (idx >= 0 && idx < data.length) setTooltip({idx, x: mx, d: data[idx]});
+        }}
+      >
+        {/* Grid */}
+        {yTickVals.map((v,i) => (
+          <g key={i}>
+            <line x1={PAD_L} y1={toY(v).toFixed(1)} x2={W-PAD_R} y2={toY(v).toFixed(1)} stroke="rgba(255,255,255,0.04)" strokeWidth="1"/>
+            <text x={PAD_L-6} y={toY(v)+4} textAnchor="end" fill="#5a5a70" fontSize="10" fontFamily="Satoshi">${v.toFixed(0)}</text>
+          </g>
+        ))}
+
+        {/* X axis labels */}
+        {xTickIdxs.map(i => (
+          <text key={i} x={toX(i)} y={H-4} textAnchor="middle" fill="#5a5a70" fontSize="10" fontFamily="Satoshi">{data[i]?.date}</text>
+        ))}
+
+        {/* Gradient def */}
+        <defs>
+          <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity="0.15"/>
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+
+        {mode === "area" ? (
+          <>
+            <path d={areaPath} fill="url(#cg)" />
+            <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2" strokeLinejoin="round"/>
+          </>
+        ) : (
+          /* Candlesticks */
+          data.map((d, i) => {
+            const x = toX(i);
+            const isGreen = d.close >= (d.open || d.close);
+            const color = isGreen ? "#2db84d" : "#e8352a";
+            const bodyTop = toY(Math.max(d.open||d.close, d.close));
+            const bodyBot = toY(Math.min(d.open||d.close, d.close));
+            const bodyH = Math.max(1, bodyBot - bodyTop);
+            return (
+              <g key={i}>
+                {/* Wick */}
+                <line x1={x} y1={toY(d.high||d.close)} x2={x} y2={toY(d.low||d.close)} stroke={color} strokeWidth="1"/>
+                {/* Body */}
+                <rect x={x - candleW/2} y={bodyTop} width={candleW} height={bodyH} fill={color} rx="1"/>
+              </g>
+            );
+          })
+        )}
+
+        {/* MA lines */}
+        {showMA50 && <path d={maPath("ma50")} fill="none" stroke="#f0a030" strokeWidth="1.5" strokeDasharray="4 3"/>}
+        {showMA200 && <path d={maPath("ma200")} fill="none" stroke="#3b8eea" strokeWidth="1.5" strokeDasharray="4 3"/>}
+
+        {/* Crosshair */}
+        {tooltip && (
+          <g>
+            <line x1={tooltip.x} y1={PAD_T} x2={tooltip.x} y2={PAD_T+chartH} stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="4 2"/>
+          </g>
+        )}
+      </svg>
+
+      {/* Tooltip */}
+      {tooltip && (
+        <div style={{
+          position:"absolute", top:8,
+          left: tooltip.x / W * 100 > 60 ? undefined : tooltip.x / W * 100 + "%",
+          right: tooltip.x / W * 100 > 60 ? (100 - tooltip.x / W * 100) + "%" : undefined,
+          background:"rgba(20,20,24,0.95)", border:"1px solid rgba(255,255,255,0.12)",
+          borderRadius:10, padding:"10px 14px", fontSize:12, fontFamily:"Satoshi", color:"#fff",
+          pointerEvents:"none", minWidth:140, backdropFilter:"blur(12px)"
+        }}>
+          <div style={{color:"#5a5a70",fontSize:11,marginBottom:4}}>{tooltip.d.date}</div>
+          <div style={{fontWeight:500,marginBottom:2}}>Close: <span style={{color:tooltip.d.close>=(tooltip.d.open||tooltip.d.close)?"#2db84d":"#e8352a"}}>${tooltip.d.close?.toFixed(2)}</span></div>
+          {tooltip.d.open && <div style={{color:"#a0a0b0",fontSize:11}}>O: ${tooltip.d.open?.toFixed(2)} H: ${tooltip.d.high?.toFixed(2)} L: ${tooltip.d.low?.toFixed(2)}</div>}
+          {tooltip.d.ma50 && showMA50 && <div style={{color:"#f0a030",fontSize:11}}>MA50: ${tooltip.d.ma50?.toFixed(2)}</div>}
+          {tooltip.d.ma200 && showMA200 && <div style={{color:"#3b8eea",fontSize:11}}>MA200: ${tooltip.d.ma200?.toFixed(2)}</div>}
+        </div>
+      )}
     </div>
   );
-};
+}
 
 function SkeletonLoader() {
   return (
@@ -258,11 +466,17 @@ export default function App() {
   const [loadingMsg, setLoadingMsg] = useState("Fetching data…");
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState("");
+  const [chartMode, setChartMode] = useState("area"); // "area" or "candle"
+  const [zoomRange, setZoomRange] = useState(null); // {start, end} indices
+  const [isPinching, setIsPinching] = useState(false);
+  const pinchRef = useRef(null);
+  const chartRef = useRef(null);
   const [error, setError] = useState("");
   const [stockData, setStockData] = useState(null);
   const [chartHistory, setChartHistory] = useState([]);
   const [rangeIdx, setRangeIdx] = useState(1);
   const [showMA50, setShowMA50] = useState(false);
+  const [chartType, setChartType] = useState("area"); // "area" or "candle"
   const [showMA200, setShowMA200] = useState(false);
   const [now, setNow] = useState("");
   const [marketStatus, setMarketStatus] = useState({label:"CLOSED",cls:"market-closed"});
@@ -352,8 +566,6 @@ export default function App() {
   const rsi = closes.length>15 ? calcRSI(closes) : null;
   const ma50v = calcMA(closes,50);
   const ma200v = calcMA(closes,200);
-  const priceMin = closes.length ? Math.min(...closes)*0.983 : "auto";
-  const priceMax = closes.length ? Math.max(...closes)*1.017 : "auto";
   const fmtN = (n,d=2) => (n==null||isNaN(n)) ? "—" : Number(n).toFixed(d);
 
   const sections = [
@@ -486,10 +698,32 @@ export default function App() {
             <div className="chart-header">
               <div className="range-group">
                 {RANGES.map((r,i)=>(
-                  <button key={r.label} className={`range-btn ${rangeIdx===i?"active":""}`} onClick={()=>changeRange(i)}>{r.label}</button>
+                  <button key={r.label} className={`range-btn ${rangeIdx===i?"active":""}`} onClick={()=>{changeRange(i);setZoomRange(null);}}>{r.label}</button>
                 ))}
               </div>
-              <div className="ma-group">
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <div className="zoom-controls">
+                  <button className="zoom-btn" onClick={()=>{
+                    const len=chartData.length;
+                    const cur=zoomRange||{start:0,end:len};
+                    const mid=Math.floor((cur.start+cur.end)/2);
+                    const quarter=Math.floor((cur.end-cur.start)/4);
+                    setZoomRange({start:Math.max(0,mid-quarter),end:Math.min(len,mid+quarter)});
+                  }}>+</button>
+                  <button className="zoom-btn" onClick={()=>{
+                    if(!zoomRange){return;}
+                    const len=chartData.length;
+                    const mid=Math.floor((zoomRange.start+zoomRange.end)/2);
+                    const half=(zoomRange.end-zoomRange.start);
+                    const ns=Math.max(0,mid-half);
+                    const ne=Math.min(len,mid+half);
+                    if(ne-ns>=len) setZoomRange(null);
+                    else setZoomRange({start:ns,end:ne});
+                  }}>−</button>
+                  {zoomRange&&<button className="zoom-btn" onClick={()=>setZoomRange(null)} style={{fontSize:11}}>Reset</button>}
+                </div>
+                <button className={`chart-mode-btn ${chartMode==="area"?"active":""}`} onClick={()=>setChartMode("area")}>Line</button>
+                <button className={`chart-mode-btn ${chartMode==="candle"?"active":""}`} onClick={()=>setChartMode("candle")}>Candles</button>
                 <button className={`ma-btn ${showMA50?"amber":""}`} onClick={()=>setShowMA50(!showMA50)}>MA 50</button>
                 <button className={`ma-btn ${showMA200?"blue":""}`} onClick={()=>setShowMA200(!showMA200)}>MA 200</button>
               </div>
@@ -506,27 +740,17 @@ export default function App() {
                 <div className="spinner"/>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <AreaChart data={chartData} margin={{top:4,right:4,left:0,bottom:0}}>
-                  <defs>
-                    <linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2db84d" stopOpacity={0.15}/>
-                      <stop offset="95%" stopColor="#2db84d" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="gDown" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#e8352a" stopOpacity={0.15}/>
-                      <stop offset="95%" stopColor="#e8352a" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)"/>
-                  <XAxis dataKey="date" tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
-                  <YAxis domain={[priceMin,priceMax]} tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} tickFormatter={v=>"$"+v.toFixed(0)} width={52}/>
-                  <Tooltip content={<ChartTip/>} cursor={{stroke:"rgba(255,255,255,0.1)",strokeWidth:1,strokeDasharray:"4 2"}}/>
-                  <Area type="monotone" dataKey="close" stroke={lineColor} strokeWidth={2} fill={isUp?"url(#gUp)":"url(#gDown)"} dot={false} name="Price"/>
-                  {showMA50&&<Area type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} fill="none" dot={false} strokeDasharray="4 3" name="MA 50"/>}
-                  {showMA200&&<Area type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} fill="none" dot={false} strokeDasharray="4 3" name="MA 200"/>}
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="chart-wrap" ref={chartRef}>
+                <CandleChart
+                  data={zoomRange ? chartData.slice(zoomRange.start, zoomRange.end) : chartData}
+                  mode={chartMode}
+                  isUp={isUp}
+                  showMA50={showMA50}
+                  showMA200={showMA200}
+                  priceMin={priceMin}
+                  priceMax={priceMax}
+                />
+              </div>
             )}
 
             {volumes.some(v=>v>0)&&(
