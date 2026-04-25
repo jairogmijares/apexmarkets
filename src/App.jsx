@@ -212,8 +212,7 @@ async function fetchCandles(sym, key, rangeObj) {
   };
   const interval = intervalMap[rangeObj.label] || "1d";
   const range = rangeMap[rangeObj.label] || "3mo";
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`;
-  const res = await fetch(url, { headers: { "Accept": "application/json" } });
+  const res = await fetch(`/api/chart?symbol=${sym}&interval=${interval}&range=${range}`);
   if (!res.ok) throw new Error("Yahoo Finance error " + res.status);
   const data = await res.json();
   const result = data?.chart?.result?.[0];
