@@ -1,25 +1,23 @@
-# ApexMarkets — Phase 1
+# ApexMarkets
 
-A stock analyzer and screener app with Apple-minimalist design.
+Stock analyzer and screener powered by Finnhub API.
 
-## Setup (first time only)
+## Setup
 
-1. Make sure Node.js is installed — download from https://nodejs.org
-2. Open Terminal and navigate to this folder:
-   cd ~/Downloads/apexmarkets
-3. Install dependencies:
-   npm install
-4. Start the app:
-   npm run dev
-5. Open your browser to: http://localhost:5173
+1. Get a free API key at https://finnhub.io/register
+2. Install dependencies: `npm install`
+3. Run locally: `npm run dev` → open http://localhost:5173
+4. Enter your Finnhub key in the app when prompted
 
-## API Key
+## Deploy to Vercel
 
-This app uses Finnhub for live stock data.
-Get your free key at: https://finnhub.io/register (no credit card needed)
-Paste it into the yellow banner when you first open the app.
+1. Push this project to GitHub
+2. Go to vercel.com → New Project → Import your GitHub repo
+3. Click Deploy — no config needed
+4. Open the live URL on any device
 
-## Every time after that
-
-Just run:
-  npm run dev
+## Tech Stack
+- React + Vite
+- Recharts for charts
+- Finnhub API for live market data
+- Satoshi font
