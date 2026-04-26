@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { AreaChart, Area, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const css = `
   @import url('https://fonts.cdnfonts.com/css/satoshi');
@@ -400,337 +400,28 @@ function SkeletonLoader(){
   );
 }
 
-export default function App(){
-  const[apiKey,setApiKey]=useState(()=>localStorage.getItem("apex_fh")||"");
-  const[keyInput,setKeyInput]=useState("");
-  const[inputVal,setInputVal]=useState("");
-  const[ticker,setTicker]=useState("");
-  const[loading,setLoading]=useState(false);
-  const[loadingMsg,setLoadingMsg]=useState("Fetching data…");
-  const[chartLoading,setChartLoading]=useState(false);
-  const[error,setError]=useState("");
-  const[stockData,setStockData]=useState(null);
-  const[chartHistory,setChartHistory]=useState([]);
-  const[rangeIdx,setRangeIdx]=useState(1);
-  const[showMA50,setShowMA50]=useState(false);
-  const[showMA200,setShowMA200]=useState(false);
-  const[chartType,setChartType]=useState("area");
-  const[now,setNow]=useState("");
-  const[marketStatus,setMarketStatus]=useState({label:"CLOSED",cls:"market-closed"});
-  const[recentTickers,setRecentTickers]=useState(()=>{try{return JSON.parse(localStorage.getItem("apex_recent")||"[]");}catch{return[];}});
-  const inputRef=useRef(null);
-
-  useEffect(()=>{
-    const d=new Date();
-    setNow(d.toLocaleString("en-US",{hour:"2-digit",minute:"2-digit",hour12:true,month:"short",day:"numeric"}));
-    setMarketStatus(getMarketStatus());
-    const clock=setInterval(()=>setMarketStatus(getMarketStatus()),60000);
-    const handler=(e)=>{if(e.key==="/"&&document.activeElement!==inputRef.current){e.preventDefault();inputRef.current?.focus();}};
-    window.addEventListener("keydown",handler);
-    return()=>{window.removeEventListener("keydown",handler);clearInterval(clock);};
-  },[]);
-
-  function saveKey(){
-    const k=keyInput.trim();
-    if(!k) return;
-    localStorage.setItem("apex_fh",k);
-    setApiKey(k);setKeyInput("");
-  }
-
-  async function go(sym){
-    const s=sym.trim().toUpperCase();
-    if(!s||!apiKey) return;
-    setTicker(s);setInputVal(s);setLoading(true);setError("");setStockData(null);setChartHistory([]);
-    const msgs=["Searching market data…","Pulling financials…","Calculating metrics…","Almost ready…"];
-    let mi=0;setLoadingMsg(msgs[0]);
-    const iv=setInterval(()=>{mi=(mi+1)%msgs.length;setLoadingMsg(msgs[mi]);},2500);
-    try{
-      const data=await fetchStock(s,apiKey);
-      setStockData(data);
-      setChartHistory(data.priceHistory);
-      const updated=[s,...recentTickers.filter(t=>t!==s)].slice(0,5);
-      setRecentTickers(updated);
-      localStorage.setItem("apex_recent",JSON.stringify(updated));
-    }catch(e){setError(e.message||"Failed to load.");}
-    clearInterval(iv);setLoading(false);
-  }
-
-  async function changeRange(idx){
-    setRangeIdx(idx);
-    if(!ticker||!apiKey) return;
-    setChartLoading(true);
-    try{
-      const pts=await fetchCandles(ticker,RANGES[idx]);
-      if(pts.length>0) setChartHistory(pts);
-    }catch(e){console.warn("Range:",e.message);}
-    setChartLoading(false);
-  }
-
-  const q=stockData?.quote||{};
-  const prof=stockData?.profile||{};
-  const m=stockData?.metrics||{};
-  const price=q.c,change=q.d,changePct=q.dp;
-  const isUp=(change||0)>=0;
-
-  const closes=chartHistory.map(d=>d.close).filter(Boolean);
-  const volumes=chartHistory.map(d=>d.volume||0);
-  const maxVol=Math.max(...volumes,1);
-  const rsi=closes.length>15?calcRSI(closes):null;
-  const ma50v=calcMA(closes,50);
-  const ma200v=calcMA(closes,200);
-  const fmtN=(n,d=2)=>(n==null||isNaN(n))?"—":Number(n).toFixed(d);
-
-  const sections=[
-    {title:"Fundamentals",delay:"d1",metrics:[
-      {lbl:"P/E Ratio",val:fmtN(m.peBasicExclExtraTTM),hint:"Trailing 12 months"},
-      {lbl:"Forward P/E",val:fmtN(m.peNormalizedAnnual),hint:"Normalized annual"},
-      {lbl:"EPS (TTM)",val:m.epsBasicExclExtraItemsTTM!=null?"$"+fmtN(m.epsBasicExclExtraItemsTTM):"—",hint:"Earnings per share"},
-      {lbl:"Revenue (TTM)",val:m.revenueTTM!=null?"$"+fmtB(m.revenueTTM):"—",hint:"Trailing 12 months"},
-      {lbl:"Profit Margin",val:m.netProfitMarginTTM!=null?fmtN(m.netProfitMarginTTM,1)+"%":"—",hint:"Net margin",c:m.netProfitMarginTTM>15?"pos":m.netProfitMarginTTM<0?"neg":""},
-      {lbl:"Rev Growth 3Y",val:m.revenueGrowth3Y!=null?fmtN(m.revenueGrowth3Y,1)+"%":"—",hint:"3-year CAGR",c:m.revenueGrowth3Y>0?"pos":"neg"},
-      {lbl:"Gross Margin",val:m.grossMarginTTM!=null?fmtN(m.grossMarginTTM,1)+"%":"—",hint:"Gross profit %"},
-      {lbl:"EBITDA Margin",val:m.ebitdaMarginTTM!=null?fmtN(m.ebitdaMarginTTM,1)+"%":"—",hint:"EBITDA margin"},
-    ]},
-    {title:"Valuation",delay:"d2",metrics:[
-      {lbl:"Market Cap",val:prof.marketCapitalization!=null?"$"+fmtB(prof.marketCapitalization*1e6):"—",hint:"Total market value"},
-      {lbl:"P/B Ratio",val:fmtN(m.pbAnnual),hint:"Price to book value"},
-      {lbl:"EV / EBITDA",val:fmtN(m.evEbitdaTTM),hint:"Enterprise multiple"},
-      {lbl:"EV / Revenue",val:fmtN(m.evRevenueTTM),hint:"Sales multiple"},
-      {lbl:"P/S Ratio",val:fmtN(m.psTTM),hint:"Price to sales TTM"},
-      {lbl:"P/CF Ratio",val:fmtN(m.pcfShareTTM),hint:"Price / cash flow"},
-      {lbl:"Book Value/Sh",val:m.bookValueShareAnnual!=null?"$"+fmtN(m.bookValueShareAnnual):"—",hint:"Per share"},
-      {lbl:"Enterprise Val",val:m.enterpriseValue!=null?"$"+fmtB(m.enterpriseValue):"—",hint:"Total EV"},
-    ]},
-    {title:"Momentum & Risk",delay:"d3",metrics:[
-      {lbl:"52W High",val:m["52WeekHigh"]!=null?"$"+fmtN(m["52WeekHigh"]):"—",hint:"52-week high"},
-      {lbl:"52W Low",val:m["52WeekLow"]!=null?"$"+fmtN(m["52WeekLow"]):"—",hint:"52-week low"},
-      {lbl:"From 52W High",val:m["52WeekHigh"]&&price?((price/m["52WeekHigh"]-1)*100).toFixed(1)+"%":"—",hint:"Distance from peak",c:m["52WeekHigh"]&&price?(price/m["52WeekHigh"]>0.92?"pos":"cau"):""},
-      {lbl:"Beta",val:fmtN(m.beta),hint:"Volatility vs S&P 500"},
-      {lbl:"Return 1W",val:m["1WeekPriceReturnDaily"]!=null?fmtN(m["1WeekPriceReturnDaily"],1)+"%":"—",hint:"1-week return",c:m["1WeekPriceReturnDaily"]>0?"pos":"neg"},
-      {lbl:"Return 1M",val:m["1MonthPriceReturnDaily"]!=null?fmtN(m["1MonthPriceReturnDaily"],1)+"%":"—",hint:"1-month return",c:m["1MonthPriceReturnDaily"]>0?"pos":"neg"},
-      {lbl:"Return YTD",val:m.ytdPriceReturnDaily!=null?fmtN(m.ytdPriceReturnDaily,1)+"%":"—",hint:"Year-to-date",c:m.ytdPriceReturnDaily>0?"pos":"neg"},
-      {lbl:"Return 1Y",val:m["52WeekPriceReturnDaily"]!=null?fmtN(m["52WeekPriceReturnDaily"],1)+"%":"—",hint:"52-week return",c:m["52WeekPriceReturnDaily"]>0?"pos":"neg"},
-    ]},
-    {title:"Technical",delay:"d4",metrics:[
-      {lbl:"RSI (14)",val:rsi!=null?fmtN(rsi,1):"—",hint:rsi>70?"Overbought":rsi<30?"Oversold":rsi!=null?"Neutral":"Insufficient data",c:rsi>70?"neg":rsi<30?"pos":""},
-      {lbl:"50-Day MA",val:ma50v!=null?"$"+fmtN(ma50v):"—",hint:price&&ma50v?(price>ma50v?"Price above MA":"Price below MA"):"Insufficient data",c:price&&ma50v?(price>ma50v?"pos":"neg"):""},
-      {lbl:"200-Day MA",val:ma200v!=null?"$"+fmtN(ma200v):"—",hint:price&&ma200v?(price>ma200v?"Price above MA":"Price below MA"):"Select 1Y+ for data",c:price&&ma200v?(price>ma200v?"pos":"neg"):""},
-      {lbl:"MA Signal",val:ma50v&&ma200v?(ma50v>ma200v?"Golden Cross":"Death Cross"):"—",hint:ma50v&&ma200v?(ma50v>ma200v?"Bullish":"Bearish"):"Need more data",c:ma50v&&ma200v?(ma50v>ma200v?"pos":"neg"):""},
-      {lbl:"Dividend Yield",val:m.dividendYieldIndicatedAnnual!=null?fmtN(m.dividendYieldIndicatedAnnual,2)+"%":"—",hint:"Annual yield"},
-      {lbl:"Payout Ratio",val:m.payoutRatioTTM!=null?fmtN(m.payoutRatioTTM,1)+"%":"—",hint:"Dividends / Earnings"},
-      {lbl:"Debt / Equity",val:fmtN(m.totalDebt_totalEquityAnnual),hint:"Leverage ratio",c:m.totalDebt_totalEquityAnnual>2?"neg":m.totalDebt_totalEquityAnnual<0.5?"pos":""},
-      {lbl:"Current Ratio",val:fmtN(m.currentRatioAnnual),hint:"Short-term liquidity",c:m.currentRatioAnnual>1.5?"pos":m.currentRatioAnnual<1?"neg":""},
-    ]},
-  ];
-
-  return(
-    <>
-      <style>{css}</style>
-      <div className="app">
-        <div className="nav">
-          <div className="logo"><span className="logo-apex">Apex</span><span className="logo-markets">Markets</span></div>
-          <div className="nav-right">
-            <span className={`market-status ${marketStatus.cls}`}>{marketStatus.label}</span>
-            <span className="nav-date">{now}</span>
-          </div>
-        </div>
-
-        {!apiKey&&(
-          <div className="api-setup">
-            <h3>🔑 Connect Finnhub API</h3>
-            <p>Get your free API key at <a href="https://finnhub.io/register" target="_blank">finnhub.io/register</a> — no credit card needed.</p>
-            <div className="api-input-row">
-              <input className="api-input" placeholder="Paste your Finnhub API key…" value={keyInput} onChange={e=>setKeyInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveKey()}/>
-              <button className="api-btn" onClick={saveKey}>Connect</button>
-            </div>
-          </div>
-        )}
-
-        {apiKey&&(
-          <div className="search-card">
-            <div className="search-row">
-              <input ref={inputRef} className="search-input" value={inputVal} onChange={e=>setInputVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go(inputVal)} placeholder="Ticker…" maxLength={6}/>
-              <button className="search-btn" onClick={()=>go(inputVal)} disabled={loading}>{loading?"Loading…":"Analyze"}</button>
-            </div>
-            <div className="quick-row">
-              {recentTickers.length>0&&<>
-                <span className="quick-label">Recent:</span>
-                {recentTickers.map(t=><div key={t} className="q-pill recent" onClick={()=>go(t)}>{t}</div>)}
-                <span className="quick-label" style={{marginLeft:4}}>|</span>
-              </>}
-              {QUICK.map(t=><div key={t} className="q-pill" onClick={()=>go(t)}>{t}</div>)}
-            </div>
-          </div>
-        )}
-
-        {error&&<div className="err-bar">⚠ {error}</div>}
-        {loading&&<><div className="spin-wrap"><div className="spinner"/><div className="spin-label">{loadingMsg}</div></div><SkeletonLoader/></>}
-
-        {!loading&&!stockData&&!error&&apiKey&&(
-          <div className="empty-card">
-            <div className="empty-icon">📊</div>
-            <div className="empty-t">Search any stock to begin</div>
-            <div className="empty-s">Enter a US-listed ticker above or tap a quick pick</div>
-            <div className="empty-tickers">{QUICK.map(t=><div key={t} className="empty-tick" onClick={()=>go(t)}>{t}</div>)}</div>
-          </div>
-        )}
-
-        {!loading&&stockData&&(<>
-          <div className="hero fade d0">
-            <div className="hero-top">
-              <div>
-                <div className="hero-ticker">{ticker}</div>
-                <div className="hero-name">{prof.name||ticker}</div>
-                <div className="hero-sub">{prof.exchange} · {prof.finnhubIndustry}</div>
-              </div>
-              <div className="hero-right">
-                <div className="hero-price">${fmtN(price)}</div>
-                <div className={`badge ${isUp?"badge-up":"badge-down"}`}>
-                  {isUp?"▲":"▼"} {sgn(change)}{fmtN(change)} ({sgn(changePct)}{fmtN(changePct,2)}%)
-                </div>
-              </div>
-            </div>
-
-            <div className="ohlc-bar">
-              {[
-                {lbl:"Open",val:q.o!=null?"$"+fmtN(q.o):"—"},
-                {lbl:"High",val:q.h!=null?"$"+fmtN(q.h):"—"},
-                {lbl:"Low",val:q.l!=null?"$"+fmtN(q.l):"—"},
-                {lbl:"Prev Close",val:q.pc!=null?"$"+fmtN(q.pc):"—"},
-                {lbl:"52W High",val:m["52WeekHigh"]!=null?"$"+fmtN(m["52WeekHigh"]):"—"},
-                {lbl:"52W Low",val:m["52WeekLow"]!=null?"$"+fmtN(m["52WeekLow"]):"—"},
-              ].map(item=>(
-                <div key={item.lbl} className="ohlc-item">
-                  <span className="ohlc-lbl">{item.lbl}</span>
-                  <span className="ohlc-val">{item.val}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="chart-controls">
-              <div className="range-group">
-                {RANGES.map((r,i)=>(
-                  <button key={r.label} className={`range-btn ${rangeIdx===i?"active":""}`} onClick={()=>changeRange(i)}>{r.label}</button>
-                ))}
-              </div>
-              <div className="chart-right-controls">
-                <button className={`ctrl-btn ${chartType==="area"?"active-green":""}`} onClick={()=>setChartType("area")}>LINE</button>
-                <button className={`ctrl-btn ${chartType==="candle"?"active-green":""}`} onClick={()=>setChartType("candle")}>CANDLE</button>
-                <button className={`ctrl-btn ${showMA50?"active-amber":""}`} onClick={()=>setShowMA50(!showMA50)}>MA 50</button>
-                <button className={`ctrl-btn ${showMA200?"active-blue":""}`} onClick={()=>setShowMA200(!showMA200)}>MA 200</button>
-              </div>
-            </div>
-
-            {chartLoading?(
-              <div style={{height:280,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="spinner"/></div>
-            ):chartType==="candle"?(
-              <CandleChart data={chartHistory} showMA50={showMA50} showMA200={showMA200}/>
-            ):(
-              <AreaChartZoom data={chartHistory} showMA50={showMA50} showMA200={showMA200} isUp={isUp}/>
-            )}
-            <div className="chart-hint">Scroll to zoom · Drag to pan</div>
-
-            {volumes.some(v=>v>0)&&(
-              <div className="vol-wrap">
-                <div className="vol-label">Volume</div>
-                <div className="vol-bars">
-                  {chartHistory.map((d,i)=>(
-                    <div key={i} className="vol-bar" style={{
-                      height:`${Math.max(4,((d.volume||0)/maxVol)*100)}%`,
-                      background:d.close>=(chartHistory[i-1]?.close||d.close)?"#2db84d":"#e8352a"
-                    }}/>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {sections.map(sec=>(
-            <div key={sec.title} className={`section fade ${sec.delay}`}>
-              <div className="section-title">{sec.title}</div>
-              <div className="mgrid">
-                {sec.metrics.map(met=>(
-                  <div key={met.lbl} className="mcell">
-                    <div className="mlbl">{met.lbl}</div>
-                    <div className={`mval ${met.c||""}`}>{met.val}</div>
-                    <div className="mhint">{met.hint}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </>)}
-      </div>
-    </>
-  );
-}function CandleStick({ x, y, width, height, payload, priceMin, priceMax, chartHeight }) {
-  if (!payload || !payload.open || !payload.close) return null;
-  const up = payload.close >= payload.open;
-  const color = up ? "#2db84d" : "#e8352a";
-  const toY = (p) => ((priceMax - p) / (priceMax - priceMin)) * chartHeight;
-  const bodyTop = toY(Math.max(payload.open, payload.close));
-  const bodyBot = toY(Math.min(payload.open, payload.close));
-  const bodyH = Math.max(1, bodyBot - bodyTop);
-  const cx = x + width / 2;
-  const wickTop = payload.high ? toY(payload.high) : bodyTop;
-  const wickBot = payload.low ? toY(payload.low) : bodyBot;
-  return (
-    <g>
-      <line x1={cx} y1={wickTop} x2={cx} y2={bodyTop} stroke={color} strokeWidth={1}/>
-      <rect x={x + 1} y={bodyTop} width={Math.max(1, width - 2)} height={bodyH} fill={color}/>
-      <line x1={cx} y1={bodyBot} x2={cx} y2={wickBot} stroke={color} strokeWidth={1}/>
-    </g>
-  );
-}
-
-function ApexChart({ data, showMA50, showMA200, chartType, isUp }) {
+function ApexChart({ data, showMA50, showMA200, isUp }) {
   if (!data?.length) return (
     <div style={{height:280,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div className="spinner"/>
     </div>
   );
-
-  const closes = data.map(d => d.close).filter(Boolean);
-  const highs = data.map(d => d.high).filter(Boolean);
-  const lows = data.map(d => d.low).filter(Boolean);
-  const priceMin = Math.min(...(lows.length ? lows : closes)) * 0.995;
-  const priceMax = Math.max(...(highs.length ? highs : closes)) * 1.005;
+  const closes = data.map(d=>d.close).filter(Boolean);
+  const priceMin = Math.min(...closes)*0.983;
+  const priceMax = Math.max(...closes)*1.017;
   const lineColor = isUp ? "#2db84d" : "#e8352a";
-  const CHART_H = 240;
-
-  const CustomTooltip = ({ active, payload }) => {
-    if (!active || !payload?.length) return null;
+  const Tip = ({active,payload}) => {
+    if (!active||!payload?.length) return null;
     const d = payload[0]?.payload;
-    if (!d) return null;
     return (
       <div className="ct">
-        <div className="ct-date">{d.date}</div>
-        <div className="ct-val">Close: ${d.close?.toFixed(2)}</div>
-        {d.open && <div className="ct-val" style={{color:"#a0a0b0",fontSize:11}}>O:{d.open?.toFixed(2)} H:{d.high?.toFixed(2)} L:{d.low?.toFixed(2)}</div>}
-        {showMA50 && d.ma50 && <div className="ct-val" style={{color:"#f0a030"}}>MA50: ${d.ma50?.toFixed(2)}</div>}
-        {showMA200 && d.ma200 && <div className="ct-val" style={{color:"#3b8eea"}}>MA200: ${d.ma200?.toFixed(2)}</div>}
+        <div className="ct-date">{d?.date}</div>
+        <div className="ct-val">Close: ${d?.close?.toFixed(2)}</div>
+        {showMA50&&d?.ma50&&<div className="ct-val" style={{color:"#f0a030"}}>MA50: ${d.ma50.toFixed(2)}</div>}
+        {showMA200&&d?.ma200&&<div className="ct-val" style={{color:"#3b8eea"}}>MA200: ${d.ma200.toFixed(2)}</div>}
       </div>
     );
   };
-
-  if (chartType === "candle") {
-    return (
-      <ResponsiveContainer width="100%" height={280}>
-        <ComposedChart data={data} margin={{top:4,right:4,left:0,bottom:0}} barCategoryGap="20%">
-          <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)"/>
-          <XAxis dataKey="date" tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
-          <YAxis domain={[priceMin,priceMax]} tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} tickFormatter={v=>"$"+v.toFixed(0)} width={52}/>
-          <Tooltip content={<CustomTooltip/>} cursor={{stroke:"rgba(255,255,255,0.1)",strokeWidth:1}}/>
-          <Bar dataKey="close" shape={(props) => (
-            <CandleStick {...props} priceMin={priceMin} priceMax={priceMax} chartHeight={CHART_H}/>
-          )}/>
-          {showMA50 && <Line type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} dot={false} strokeDasharray="4 3"/>}
-          {showMA200 && <Line type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} dot={false} strokeDasharray="4 3"/>}
-        </ComposedChart>
-      </ResponsiveContainer>
-    );
-  }
-
   return (
     <ResponsiveContainer width="100%" height={280}>
       <AreaChart data={data} margin={{top:4,right:4,left:0,bottom:0}}>
@@ -747,14 +438,15 @@ function ApexChart({ data, showMA50, showMA200, chartType, isUp }) {
         <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)"/>
         <XAxis dataKey="date" tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
         <YAxis domain={[priceMin,priceMax]} tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} tickFormatter={v=>"$"+v.toFixed(0)} width={52}/>
-        <Tooltip content={<CustomTooltip/>} cursor={{stroke:"rgba(255,255,255,0.1)",strokeWidth:1,strokeDasharray:"4 2"}}/>
-        <Area type="monotone" dataKey="close" stroke={lineColor} strokeWidth={2} fill={isUp?"url(#gUp)":"url(#gDown)"} dot={false} name="Price"/>
-        {showMA50 && <Line type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} dot={false} strokeDasharray="4 3"/>}
-        {showMA200 && <Line type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} dot={false} strokeDasharray="4 3"/>}
+        <Tooltip content={<Tip/>} cursor={{stroke:"rgba(255,255,255,0.1)",strokeWidth:1,strokeDasharray:"4 2"}}/>
+        <Area type="monotone" dataKey="close" stroke={lineColor} strokeWidth={2} fill={isUp?"url(#gUp)":"url(#gDown)"} dot={false}/>
+        {showMA50&&<Line type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} dot={false} strokeDasharray="4 3"/>}
+        {showMA200&&<Line type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} dot={false} strokeDasharray="4 3"/>}
       </AreaChart>
     </ResponsiveContainer>
   );
 }
+
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("apex_finnhub_key") || "");
   const [keyInput, setKeyInput] = useState("");
@@ -770,7 +462,6 @@ export default function App() {
   const [rangeIdx, setRangeIdx] = useState(1);
   const [showMA50, setShowMA50] = useState(false);
   const [showMA200, setShowMA200] = useState(false);
-  const [chartType, setChartType] = useState("area");
   const [now, setNow] = useState("");
   const [marketStatus, setMarketStatus] = useState({label:"CLOSED",cls:"market-closed"});
   const [recentTickers, setRecentTickers] = useState(() => {
@@ -794,8 +485,7 @@ export default function App() {
     const k = keyInput.trim();
     if (!k) return;
     localStorage.setItem("apex_finnhub_key",k);
-    setApiKey(k);
-    setKeyInput("");
+    setApiKey(k); setKeyInput("");
   }
 
   async function go(sym) {
@@ -809,7 +499,7 @@ export default function App() {
       const data = await fetchStock(s, apiKey);
       setStockData(data);
       setChartHistory(data.priceHistory);
-      if (data.priceHistory.length === 0) setChartError("No chart data — try clicking a range button.");
+      if (!data.priceHistory.length) setChartError("No chart data — try clicking a range button.");
       const updated = [s,...recentTickers.filter(t=>t!==s)].slice(0,5);
       setRecentTickers(updated);
       localStorage.setItem("apex_recent",JSON.stringify(updated));
@@ -825,7 +515,7 @@ export default function App() {
     setChartLoading(true); setChartError("");
     try {
       const pts = await fetchCandles(ticker, apiKey, RANGES[idx]);
-      if (pts.length > 0) { setChartHistory(pts); }
+      if (pts.length>0) setChartHistory(pts);
       else setChartError("No data for this range.");
     } catch(e) { setChartError("Chart load failed. Try again."); }
     setChartLoading(false);
@@ -978,19 +668,13 @@ export default function App() {
                   <button key={r.label} className={`range-btn ${rangeIdx===i?"active":""}`} onClick={()=>changeRange(i)}>{r.label}</button>
                 ))}
               </div>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <div className="ma-group">
-                  <button className={`ma-btn ${chartType==="area"?"blue":""}`} onClick={()=>setChartType("area")}>LINE</button>
-                  <button className={`ma-btn ${chartType==="candle"?"blue":""}`} onClick={()=>setChartType("candle")}>CANDLE</button>
-                </div>
-                <div className="ma-group">
-                  <button className={`ma-btn ${showMA50?"amber":""}`} onClick={()=>setShowMA50(!showMA50)}>MA 50</button>
-                  <button className={`ma-btn ${showMA200?"blue":""}`} onClick={()=>setShowMA200(!showMA200)}>MA 200</button>
-                </div>
+              <div className="ma-group">
+                <button className={`ma-btn ${showMA50?"amber":""}`} onClick={()=>setShowMA50(!showMA50)}>MA 50</button>
+                <button className={`ma-btn ${showMA200?"blue":""}`} onClick={()=>setShowMA200(!showMA200)}>MA 200</button>
               </div>
             </div>
 
-            {chartError && (
+            {chartError&&(
               <div style={{textAlign:"center",padding:"16px 0",fontSize:13,color:"var(--amber)"}}>
                 ⚠ {chartError}
                 <button onClick={()=>changeRange(rangeIdx)} style={{marginLeft:10,background:"var(--amber-bg)",color:"var(--amber)",border:"1px solid var(--amber)",borderRadius:6,padding:"3px 10px",fontSize:12,cursor:"pointer",fontFamily:"var(--font)"}}>Retry</button>
@@ -1002,13 +686,7 @@ export default function App() {
                 <div className="spinner"/>
               </div>
             ) : (
-              <ApexChart
-                data={chartData}
-                showMA50={showMA50}
-                showMA200={showMA200}
-                chartType={chartType}
-                isUp={isUp}
-              />
+              <ApexChart data={chartData} showMA50={showMA50} showMA200={showMA200} isUp={isUp}/>
             )}
 
             {chartData.some(d=>d.volume>0)&&(
@@ -1016,7 +694,7 @@ export default function App() {
                 <div className="vol-label">Volume</div>
                 <div className="vol-bars">
                   {chartData.map((d,i)=>{
-                    const maxVol = Math.max(...chartData.map(x=>x.volume||0),1);
+                    const maxVol=Math.max(...chartData.map(x=>x.volume||0),1);
                     return <div key={i} className="vol-bar" style={{height:`${Math.max(4,((d.volume||0)/maxVol)*100)}%`,background:d.close>=(chartData[i-1]?.close||d.close)?"#2db84d":"#e8352a"}}/>;
                   })}
                 </div>
