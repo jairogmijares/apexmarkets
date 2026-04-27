@@ -514,7 +514,7 @@ export default function App() {
     if (!ticker||!apiKey) return;
     setChartLoading(true); setChartError("");
     try {
-      const pts = await fetchCandles(ticker, apiKey, RANGES[idx]);
+      const pts = await fetchCandles(ticker, RANGES[idx]);
       if (pts.length>0) setChartHistory(pts);
       else setChartError("No data for this range.");
     } catch(e) { setChartError("Chart load failed. Try again."); }
