@@ -69,13 +69,11 @@ export default async function handler(req, res) {
     }
 
     // Format dates
-    const useYear = visibleDays > 365;
     const formatted = visible.map(p => ({
       ts: p.ts,
-      time: p.ts, // for Lightweight Charts
       date: new Date(p.ts * 1000).toLocaleDateString("en-US", {
         month: "short", day: "numeric",
-        year: useYear ? "2-digit" : undefined
+        year: visibleDays > 180 ? "2-digit" : undefined
       }),
       open: p.open,
       high: p.high,

@@ -686,7 +686,7 @@ export default function App() {
                 <div className="spinner"/>
               </div>
             ) : (
-              <ApexChart data={chartData} showMA50={showMA50} showMA200={showMA200} isUp={isUp}/>
+              <ApexChart key={rangeIdx} data={chartData} showMA50={showMA50} showMA200={showMA200} isUp={isUp}/>
             )}
 
             {chartData.some(d=>d.volume>0)&&(
