@@ -191,214 +191,6 @@ async function fetchCandles(sym,rangeObj){
 }
 
 // SVG Candlestick Chart
-function CandleChart({data,showMA50,showMA200}){
-  const ref=useRef(null);
-  const[w,setW]=useState(800);
-  const[zoom,setZoom]=useState({s:0,e:100});
-  const[dragX,setDragX]=useState(null);
-  const[tooltip,setTooltip]=useState(null);
-
-  useEffect(()=>{
-    if(!ref.current) return;
-    setW(ref.current.clientWidth);
-    const ro=new ResizeObserver(()=>setW(ref.current?.clientWidth||800));
-    ro.observe(ref.current);
-    return ()=>ro.disconnect();
-  },[]);
-
-  const total=data.length;
-  const si=Math.floor((zoom.s/100)*total);
-  const ei=Math.max(si+5,Math.ceil((zoom.e/100)*total));
-  const vis=data.slice(si,ei);
-  if(!vis.length) return null;
-
-  const H=280,PAD={t:10,r:58,b:28,l:8};
-  const cW=w-PAD.l-PAD.r,cH=H-PAD.t-PAD.b;
-  const prices=vis.flatMap(d=>[d.high,d.low].filter(Boolean));
-  const pMin=Math.min(...prices)*0.995,pMax=Math.max(...prices)*1.005;
-  const toX=(i)=>PAD.l+(i/(vis.length-1||1))*cW;
-  const toY=(p)=>PAD.t+((pMax-p)/(pMax-pMin))*cH;
-  const bW=Math.max(2,Math.min(14,(cW/vis.length)*0.65));
-
-  const onWheel=(e)=>{
-    e.preventDefault();
-    const delta=e.deltaY>0?3:-3;
-    setZoom(z=>{
-      const range=z.e-z.s;
-      const newRange=Math.max(10,Math.min(100,range+delta));
-      const mid=(z.s+z.e)/2;
-      return {s:Math.max(0,mid-newRange/2),e:Math.min(100,mid+newRange/2)};
-    });
-  };
-  const onMD=(e)=>setDragX(e.clientX);
-  const onMM=(e)=>{
-    if(dragX===null) return;
-    const pct=((e.clientX-dragX)/w)*-(zoom.e-zoom.s)*0.5;
-    setZoom(z=>{const r=z.e-z.s;const ns=Math.max(0,Math.min(100-r,z.s+pct));return {s:ns,e:ns+r};});
-    setDragX(e.clientX);
-  };
-  const onMU=()=>setDragX(null);
-
-  const ma50pts=vis.filter(d=>d.ma50).map((d,i)=>({i:vis.indexOf(d),v:d.ma50}));
-  const ma200pts=vis.filter(d=>d.ma200).map((d,i)=>({i:vis.indexOf(d),v:d.ma200}));
-  const maPath=(pts)=>pts.map((p,i)=>`${i===0?"M":"L"}${toX(p.i)},${toY(p.v)}`).join(" ");
-
-  const xLabels=[0,Math.floor(vis.length/4),Math.floor(vis.length/2),Math.floor(3*vis.length/4),vis.length-1].filter((v,i,a)=>a.indexOf(v)===i);
-
-  return(
-    <div ref={ref} style={{position:"relative",cursor:dragX!==null?"grabbing":"crosshair",userSelect:"none"}}
-      onWheel={onWheel} onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU}>
-      <svg width={w} height={H} style={{display:"block"}}>
-        {[0,.25,.5,.75,1].map(t=>(
-          <g key={t}>
-            <line x1={PAD.l} y1={PAD.t+t*cH} x2={w-PAD.r} y2={PAD.t+t*cH} stroke="rgba(255,255,255,0.04)" strokeWidth={1}/>
-            <text x={w-PAD.r+5} y={PAD.t+t*cH+4} fill="#5a5a70" fontSize={10} fontFamily="Satoshi">${(pMax-t*(pMax-pMin)).toFixed(0)}</text>
-          </g>
-        ))}
-        {vis.map((d,i)=>{
-          if(!d.open||!d.close) return null;
-          const up=d.close>=d.open;
-          const col=up?"#2db84d":"#e8352a";
-          const x=toX(i);
-          const bT=toY(Math.max(d.open,d.close));
-          const bB=toY(Math.min(d.open,d.close));
-          const bH=Math.max(1,bB-bT);
-          return(
-            <g key={i} onMouseEnter={()=>setTooltip({d,x:x,y:bT})} onMouseLeave={()=>setTooltip(null)}>
-              {d.high&&<line x1={x} y1={toY(d.high)} x2={x} y2={bT} stroke={col} strokeWidth={1}/>}
-              <rect x={x-bW/2} y={bT} width={bW} height={bH} fill={col} opacity={0.85}/>
-              {d.low&&<line x1={x} y1={bB} x2={x} y2={toY(d.low)} stroke={col} strokeWidth={1}/>}
-            </g>
-          );
-        })}
-        {showMA50&&ma50pts.length>0&&<path d={maPath(ma50pts)} fill="none" stroke="#f0a030" strokeWidth={1.5} strokeDasharray="4 3"/>}
-        {showMA200&&ma200pts.length>0&&<path d={maPath(ma200pts)} fill="none" stroke="#3b8eea" strokeWidth={1.5} strokeDasharray="4 3"/>}
-        {xLabels.map(i=>vis[i]&&(
-          <text key={i} x={toX(i)} y={H-6} fill="#5a5a70" fontSize={10} fontFamily="Satoshi" textAnchor="middle">{vis[i].date}</text>
-        ))}
-      </svg>
-      {tooltip&&(
-        <div style={{position:"absolute",left:Math.min(tooltip.x+10,w-160),top:Math.max(0,tooltip.y-10),pointerEvents:"none",zIndex:10}} className="ct">
-          <div className="ct-date">{tooltip.d.date}</div>
-          <div className="ct-val">O: ${tooltip.d.open?.toFixed(2)}</div>
-          <div className="ct-val">H: ${tooltip.d.high?.toFixed(2)}</div>
-          <div className="ct-val">L: ${tooltip.d.low?.toFixed(2)}</div>
-          <div className="ct-val">C: ${tooltip.d.close?.toFixed(2)}</div>
-          {showMA50&&tooltip.d.ma50&&<div className="ct-val" style={{color:"#f0a030"}}>MA50: ${tooltip.d.ma50?.toFixed(2)}</div>}
-          {showMA200&&tooltip.d.ma200&&<div className="ct-val" style={{color:"#3b8eea"}}>MA200: ${tooltip.d.ma200?.toFixed(2)}</div>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Area Chart with zoom
-function AreaChartZoom({data,showMA50,showMA200,isUp}){
-  const ref=useRef(null);
-  const[zoom,setZoom]=useState({s:0,e:100});
-  const[dragX,setDragX]=useState(null);
-
-  const total=data.length;
-  const si=Math.floor((zoom.s/100)*total);
-  const ei=Math.max(si+5,Math.ceil((zoom.e/100)*total));
-  const vis=data.slice(si,ei);
-
-  const prices=vis.map(d=>d.close).filter(Boolean);
-  const pMin=prices.length?Math.min(...prices)*0.983:"auto";
-  const pMax=prices.length?Math.max(...prices)*1.017:"auto";
-  const lineColor=isUp?"#2db84d":"#e8352a";
-
-  const onWheel=(e)=>{
-    e.preventDefault();
-    const delta=e.deltaY>0?3:-3;
-    setZoom(z=>{
-      const range=z.e-z.s;
-      const newRange=Math.max(10,Math.min(100,range+delta));
-      const mid=(z.s+z.e)/2;
-      return {s:Math.max(0,mid-newRange/2),e:Math.min(100,mid+newRange/2)};
-    });
-  };
-  const onMD=(e)=>setDragX(e.clientX);
-  const onMM=(e)=>{
-    if(dragX===null||!ref.current) return;
-    const pct=((e.clientX-dragX)/ref.current.clientWidth)*-(zoom.e-zoom.s)*0.5;
-    setZoom(z=>{const r=z.e-z.s;const ns=Math.max(0,Math.min(100-r,z.s+pct));return{s:ns,e:ns+r};});
-    setDragX(e.clientX);
-  };
-  const onMU=()=>setDragX(null);
-
-  const ChartTip=({active,payload,label})=>{
-    if(!active||!payload?.length) return null;
-    const d=payload[0]?.payload;
-    return(
-      <div className="ct">
-        <div className="ct-date">{d?.date}</div>
-        {d?.close&&<div className="ct-val">${d.close.toFixed(2)}</div>}
-        {showMA50&&d?.ma50&&<div className="ct-val" style={{color:"#f0a030"}}>MA50: ${d.ma50.toFixed(2)}</div>}
-        {showMA200&&d?.ma200&&<div className="ct-val" style={{color:"#3b8eea"}}>MA200: ${d.ma200.toFixed(2)}</div>}
-      </div>
-    );
-  };
-
-  return(
-    <div ref={ref} style={{cursor:dragX!==null?"grabbing":"crosshair",userSelect:"none"}}
-      onWheel={onWheel} onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU}>
-      <ResponsiveContainer width="100%" height={280}>
-        <AreaChart data={vis} margin={{top:4,right:4,left:0,bottom:0}}>
-          <defs>
-            <linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#2db84d" stopOpacity={0.15}/>
-              <stop offset="95%" stopColor="#2db84d" stopOpacity={0}/>
-            </linearGradient>
-            <linearGradient id="gDown" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#e8352a" stopOpacity={0.15}/>
-              <stop offset="95%" stopColor="#e8352a" stopOpacity={0}/>
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)"/>
-          <XAxis dataKey="date" tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
-          <YAxis domain={[pMin,pMax]} tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} tickFormatter={v=>"$"+v.toFixed(0)} width={52}/>
-          <Tooltip content={<ChartTip/>} cursor={{stroke:"rgba(255,255,255,0.1)",strokeWidth:1,strokeDasharray:"4 2"}}/>
-          <Area type="monotone" dataKey="close" stroke={lineColor} strokeWidth={2} fill={isUp?"url(#gUp)":"url(#gDown)"} dot={false} name="Price"/>
-          {showMA50&&<Line type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} dot={false} strokeDasharray="4 3" name="ma50"/>}
-          {showMA200&&<Line type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} dot={false} strokeDasharray="4 3" name="ma200"/>}
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function SkeletonLoader(){
-  return(
-    <>
-      <div className="sk-hero">
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
-          <div>
-            <div className="skeleton" style={{height:14,width:80,borderRadius:6,marginBottom:10}}/>
-            <div className="skeleton" style={{height:28,width:220,borderRadius:6,marginBottom:8}}/>
-            <div className="skeleton" style={{height:12,width:140,borderRadius:6}}/>
-          </div>
-          <div>
-            <div className="skeleton" style={{height:44,width:160,borderRadius:6,marginBottom:8}}/>
-            <div className="skeleton" style={{height:28,width:120,borderRadius:6,marginLeft:"auto"}}/>
-          </div>
-        </div>
-        <div className="skeleton" style={{height:280,borderRadius:6}}/>
-      </div>
-      {[0,1,2,3].map(i=>(
-        <div key={i} className="sk-grid" style={{marginBottom:12}}>
-          {[0,1,2,3,4,5,6,7].map(j=>(
-            <div key={j} className="sk-cell">
-              <div className="skeleton" style={{height:10,width:"60%",borderRadius:4,marginBottom:12}}/>
-              <div className="skeleton" style={{height:22,width:"80%",borderRadius:4,marginBottom:8}}/>
-              <div className="skeleton" style={{height:10,width:"50%",borderRadius:4}}/>
-            </div>
-          ))}
-        </div>
-      ))}
-    </>
-  );
-}
 
 function ApexChart({ data, showMA50, showMA200, isUp }) {
   if (!data?.length) return (
@@ -410,6 +202,7 @@ function ApexChart({ data, showMA50, showMA200, isUp }) {
   const priceMin = Math.min(...closes)*0.983;
   const priceMax = Math.max(...closes)*1.017;
   const lineColor = isUp ? "#2db84d" : "#e8352a";
+
   const Tip = ({active,payload}) => {
     if (!active||!payload?.length) return null;
     const d = payload[0]?.payload;
@@ -422,6 +215,7 @@ function ApexChart({ data, showMA50, showMA200, isUp }) {
       </div>
     );
   };
+
   return (
     <ResponsiveContainer width="100%" height={280}>
       <AreaChart data={data} margin={{top:4,right:4,left:0,bottom:0}}>
@@ -446,6 +240,7 @@ function ApexChart({ data, showMA50, showMA200, isUp }) {
     </ResponsiveContainer>
   );
 }
+
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("apex_finnhub_key") || "");
@@ -686,7 +481,7 @@ export default function App() {
                 <div className="spinner"/>
               </div>
             ) : (
-              <ApexChart key={rangeIdx} data={chartData} showMA50={showMA50} showMA200={showMA200} isUp={isUp}/>
+              <ApexChart data={chartData} showMA50={showMA50} showMA200={showMA200} isUp={isUp}/>
             )}
 
             {chartData.some(d=>d.volume>0)&&(
