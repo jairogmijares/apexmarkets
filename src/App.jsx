@@ -540,7 +540,7 @@ export default function App() {
                   <div className="spinner"/>
                 </div>
               ) : (
-                <StockChart data={chartData} showMA50={showMA50} showMA200={showMA200} isUp={isUp}/>
+                <StockChart data={chartData} showMA50={showMA50} showMA200={showMA200}/>
               )}
 
               {/* Volume */}
