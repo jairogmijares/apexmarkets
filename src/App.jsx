@@ -209,30 +209,30 @@ async function fetchCandles(sym, rangeObj) {
   return d.apexData || [];
 }
 
+// ── Chart Tooltip ─────────────────────────────────────────────────────────────
+const ChartTooltip = ({ active, payload }) => {
+  if (!active || !payload || !payload.length) return null;
+  const d = payload[0].payload;
+  if (!d) return null;
+  return (
+    <div className="ct">
+      <div className="ct-date">{d.date}</div>
+      {d.close != null && <div className="ct-val">Close: ${fmt(d.close)}</div>}
+      {payload.find(p => p.dataKey === "ma50") && <div className="ct-val" style={{color:"#f0a030"}}>MA50: ${fmt(payload.find(p=>p.dataKey==="ma50").value)}</div>}
+      {payload.find(p => p.dataKey === "ma200") && <div className="ct-val" style={{color:"#3b8eea"}}>MA200: ${fmt(payload.find(p=>p.dataKey==="ma200").value)}</div>}
+    </div>
+  );
+};
+
 // ── Chart Component ───────────────────────────────────────────────────────────
 function StockChart({ data, showMA50, showMA200, isUp }) {
   if (!data || data.length === 0) return null;
-
   const closes = data.map(d => d.close).filter(Boolean);
   if (!closes.length) return null;
-
   const priceMin = Math.min(...closes) * 0.983;
   const priceMax = Math.max(...closes) * 1.017;
   const lineColor = isUp ? "#2db84d" : "#e8352a";
-
-  function Tip({ active, payload }) {
-    if (!active || !payload || !payload.length) return null;
-    const d = payload[0] && payload[0].payload;
-    if (!d) return null;
-    return (
-      <div className="ct">
-        <div className="ct-date">{d.date}</div>
-        <div className="ct-val">Close: ${fmt(d.close)}</div>
-        {showMA50 && d.ma50 != null && <div className="ct-val" style={{color:"#f0a030"}}>MA50: ${fmt(d.ma50)}</div>}
-        {showMA200 && d.ma200 != null && <div className="ct-val" style={{color:"#3b8eea"}}>MA200: ${fmt(d.ma200)}</div>}
-      </div>
-    );
-  }
+  const gradId = isUp ? "gradUp" : "gradDown";
 
   return (
     <ResponsiveContainer width="100%" height={280}>
@@ -250,8 +250,8 @@ function StockChart({ data, showMA50, showMA200, isUp }) {
         <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)"/>
         <XAxis dataKey="date" tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
         <YAxis domain={[priceMin,priceMax]} tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} tickFormatter={v=>"$"+v.toFixed(0)} width={52}/>
-        <Tooltip content={Tip} cursor={{stroke:"rgba(255,255,255,0.1)",strokeWidth:1,strokeDasharray:"4 2"}}/>
-        <Area type="monotone" dataKey="close" stroke={lineColor} strokeWidth={2} fill={isUp?"url(#gradUp)":"url(#gradDown)"} dot={false}/>
+        <Tooltip content={<ChartTooltip/>} cursor={{stroke:"rgba(255,255,255,0.1)",strokeWidth:1,strokeDasharray:"4 2"}}/>
+        <Area type="monotone" dataKey="close" stroke={lineColor} strokeWidth={2} fill={`url(#${gradId})`} dot={false}/>
         {showMA50 && <Line type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} dot={false} strokeDasharray="4 3"/>}
         {showMA200 && <Line type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} dot={false} strokeDasharray="4 3"/>}
       </AreaChart>
