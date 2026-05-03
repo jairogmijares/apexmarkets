@@ -526,6 +526,13 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Chart color debug */}
+              {chartData.length > 0 && (
+                <div style={{fontSize:11,color:"var(--tertiary)",marginBottom:6}}>
+                  Range: ${chartData[0]?.close?.toFixed(2)} → ${chartData[chartData.length-1]?.close?.toFixed(2)}
+                </div>
+              )}
+
               {/* Chart error */}
               {chartError && (
                 <div style={{textAlign:"center",padding:"12px 0",fontSize:13,color:"var(--amber)"}}>
