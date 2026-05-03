@@ -526,6 +526,16 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Debug: show MA data availability */}
+              {chartData.length > 0 && (
+                <div style={{fontSize:11,color:"var(--tertiary)",marginBottom:8,display:"flex",gap:12}}>
+                  <span>Points: {chartData.length}</span>
+                  <span>MA50 available: {chartData.filter(d=>d.ma50!=null).length}</span>
+                  <span>MA200 available: {chartData.filter(d=>d.ma200!=null).length}</span>
+                  <span>showMA50: {String(showMA50)}</span>
+                </div>
+              )}
+
               {/* Chart error */}
               {chartError && (
                 <div style={{textAlign:"center",padding:"12px 0",fontSize:13,color:"var(--amber)"}}>
