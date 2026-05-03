@@ -229,6 +229,8 @@ function StockChart({ data, showMA50, showMA200, isUp }) {
   if (!data || data.length === 0) return null;
   const closes = data.map(d => d.close).filter(Boolean);
   if (!closes.length) return null;
+  const ma50Count = data.filter(d => d.ma50 != null).length;
+  const ma200Count = data.filter(d => d.ma200 != null).length;
   const priceMin = Math.min(...closes) * 0.983;
   const priceMax = Math.max(...closes) * 1.017;
   const lineColor = isUp ? "#2db84d" : "#e8352a";
@@ -252,8 +254,8 @@ function StockChart({ data, showMA50, showMA200, isUp }) {
         <YAxis domain={[priceMin,priceMax]} tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} tickFormatter={v=>"$"+v.toFixed(0)} width={52}/>
         <Tooltip content={<ChartTooltip/>} cursor={{stroke:"rgba(255,255,255,0.1)",strokeWidth:1,strokeDasharray:"4 2"}}/>
         <Area type="monotone" dataKey="close" stroke={lineColor} strokeWidth={2} fill={`url(#${gradId})`} dot={false}/>
-        {showMA50 && <Line type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} dot={false} strokeDasharray="4 3"/>}
-        {showMA200 && <Line type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} dot={false} strokeDasharray="4 3"/>}
+        {showMA50 && <Line type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={true}/>}
+        {showMA200 && <Line type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={true}/>}
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -519,8 +521,8 @@ export default function App() {
                   ))}
                 </div>
                 <div className="ma-group">
-                  <button className={`ma-btn ${showMA50?"amber":""}`} onClick={()=>setShowMA50(v=>!v)}>MA 50</button>
-                  <button className={`ma-btn ${showMA200?"blue":""}`} onClick={()=>setShowMA200(v=>!v)}>MA 200</button>
+                  <button className={`ma-btn ${showMA50?"amber":""}`} onClick={()=>setShowMA50(v=>!v)} title={`MA50: ${chartData.filter(d=>d.ma50!=null).length} pts`}>MA 50</button>
+                  <button className={`ma-btn ${showMA200?"blue":""}`} onClick={()=>setShowMA200(v=>!v)} title={`MA200: ${chartData.filter(d=>d.ma200!=null).length} pts`}>MA 200</button>
                 </div>
               </div>
 
