@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const css = `
   @import url('https://fonts.cdnfonts.com/css/satoshi');
@@ -238,7 +238,7 @@ function StockChart({ data, showMA50, showMA200, isUp }) {
 
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <AreaChart data={data} margin={{top:4,right:4,left:0,bottom:0}}>
+      <ComposedChart data={data} margin={{top:4,right:4,left:0,bottom:0}}>
         <defs>
           <linearGradient id="gradUp" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#2db84d" stopOpacity={0.15}/>
@@ -256,7 +256,7 @@ function StockChart({ data, showMA50, showMA200, isUp }) {
         <Area type="monotone" dataKey="close" stroke={lineColor} strokeWidth={2} fill={`url(#${gradId})`} dot={false}/>
         {showMA50 && <Line type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={true}/>}
         {showMA200 && <Line type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={true}/>}
-      </AreaChart>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }
@@ -525,16 +525,6 @@ export default function App() {
                   <button className={`ma-btn ${showMA200?"blue":""}`} onClick={()=>setShowMA200(v=>!v)} title={`MA200: ${chartData.filter(d=>d.ma200!=null).length} pts`}>MA 200</button>
                 </div>
               </div>
-
-              {/* Debug: show MA data availability */}
-              {chartData.length > 0 && (
-                <div style={{fontSize:11,color:"var(--tertiary)",marginBottom:8,display:"flex",gap:12}}>
-                  <span>Points: {chartData.length}</span>
-                  <span>MA50 available: {chartData.filter(d=>d.ma50!=null).length}</span>
-                  <span>MA200 available: {chartData.filter(d=>d.ma200!=null).length}</span>
-                  <span>showMA50: {String(showMA50)}</span>
-                </div>
-              )}
 
               {/* Chart error */}
               {chartError && (
