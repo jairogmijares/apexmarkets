@@ -622,7 +622,10 @@ export default function App() {
                 <div className="mgrid">
                   {sec.metrics.map(met=>(
                     <div key={met.lbl} className="mcell">
-                      <div className="mlbl">{met.lbl}</div>
+                      <div className="mlbl-row">
+                        <div className="mlbl">{met.lbl}</div>
+                        <InfoIcon label={met.lbl}/>
+                      </div>
                       <div className={`mval ${met.c||""}`}>{met.val}</div>
                       <div className="mhint">{met.hint}</div>
                     </div>
