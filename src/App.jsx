@@ -105,6 +105,14 @@ const css = `
   .mval { font-size: 20px; font-weight: 400; letter-spacing: -0.5px; color: var(--text); margin-bottom: 3px; }
   .mval.pos { color: var(--green); } .mval.neg { color: var(--red); } .mval.cau { color: var(--amber); }
   .mhint { font-size: 11px; color: var(--tertiary); }
+  .info-wrap { position: relative; display: inline-flex; align-items: center; margin-left: 5px; vertical-align: middle; }
+  .info-icon { width: 13px; height: 13px; border-radius: 50%; background: rgba(255,255,255,0.1); color: var(--tertiary); font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: default; flex-shrink: 0; transition: background 0.15s; line-height: 1; }
+  .info-icon:hover { background: var(--accent-light); color: var(--accent); }
+  .info-tip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #1e1e2e; border: 1px solid var(--border-strong); border-radius: 10px; padding: 10px 13px; width: 220px; font-size: 11px; color: var(--secondary); line-height: 1.6; z-index: 100; pointer-events: none; opacity: 0; transition: opacity 0.15s; white-space: normal; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  .info-tip strong { color: var(--text); display: block; margin-bottom: 4px; font-size: 11px; }
+  .info-wrap:hover .info-tip { opacity: 1; }
+  .mlbl-row { display: flex; align-items: center; margin-bottom: 8px; }
+  .mlbl-row .mlbl { margin-bottom: 0; }
 
   .empty-card { background: var(--white); border-radius: var(--radius); padding: 60px 40px; text-align: center; box-shadow: var(--shadow); }
   .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.2; }
@@ -207,6 +215,59 @@ async function fetchCandles(sym, rangeObj) {
   if (!res.ok) throw new Error("Chart " + res.status);
   const d = await res.json();
   return d.apexData || [];
+}
+
+// ── Info Icon ────────────────────────────────────────────────────────────────
+const DEFINITIONS = {
+  "P/E Ratio": { def: "Price divided by earnings per share over the last 12 months.", effect: "A high P/E may mean overvalued or high growth expectations. A low P/E may signal undervaluation or slow growth." },
+  "Forward P/E": { def: "Price divided by estimated future earnings per share.", effect: "Lower than trailing P/E suggests earnings growth ahead. Higher may mean slowing growth." },
+  "EPS (TTM)": { def: "Earnings Per Share — net profit divided by shares outstanding over the last 12 months.", effect: "Rising EPS signals improving profitability. Negative EPS means the company is losing money." },
+  "Revenue (TTM)": { def: "Total revenue generated over the trailing 12 months.", effect: "Growing revenue indicates business expansion. Flat or declining revenue may be a warning sign." },
+  "Profit Margin": { def: "Net income as a percentage of revenue.", effect: "Higher margins mean more efficient operations. Negative margin means the company spends more than it earns." },
+  "Rev Growth 3Y": { def: "Compound annual revenue growth rate over 3 years.", effect: "Sustained growth above 15% is generally strong. Negative growth may signal a declining business." },
+  "Gross Margin": { def: "Revenue minus cost of goods sold, as a percentage of revenue.", effect: "Higher gross margins give more room for profit. Software companies often have 70–90% gross margins." },
+  "EBITDA Margin": { def: "Earnings before interest, taxes, depreciation, and amortization as a % of revenue.", effect: "A proxy for operating efficiency. Higher is better. Negative EBITDA means core operations are unprofitable." },
+  "Market Cap": { def: "Total market value of all outstanding shares (price × shares).", effect: "Large-cap (>$10B) stocks are generally more stable. Small-cap (<$2B) stocks carry higher risk and reward." },
+  "P/B Ratio": { def: "Price divided by book value (net assets) per share.", effect: "A P/B below 1 can indicate undervaluation. Very high P/B may mean the stock is overpriced relative to assets." },
+  "EV / EBITDA": { def: "Enterprise Value divided by EBITDA — a valuation multiple.", effect: "Lower multiples may indicate undervaluation. Used to compare companies regardless of capital structure." },
+  "EV / Revenue": { def: "Enterprise Value divided by annual revenue.", effect: "Useful for companies with no earnings. Lower means cheaper relative to sales." },
+  "P/S Ratio": { def: "Price divided by revenue per share (Price-to-Sales).", effect: "Useful for unprofitable companies. A low P/S in a high-margin business can signal value." },
+  "P/CF Ratio": { def: "Price divided by cash flow per share.", effect: "Cash flow is harder to manipulate than earnings. A low P/CF may indicate undervaluation." },
+  "Book Value/Sh": { def: "Net assets (assets minus liabilities) divided by shares outstanding.", effect: "A stock trading below book value may be undervalued. High intangibles can inflate book value." },
+  "Enterprise Val": { def: "Market cap plus debt minus cash — the theoretical takeover price.", effect: "Used in valuation ratios like EV/EBITDA. Reflects the true cost to acquire the whole business." },
+  "52W High": { def: "The highest price the stock has traded at in the past 52 weeks.", effect: "Trading near the 52W high may signal momentum or resistance. Breaking above it can be bullish." },
+  "52W Low": { def: "The lowest price the stock has traded at in the past 52 weeks.", effect: "Trading near the 52W low may signal weakness or a buying opportunity. Breaking below can be bearish." },
+  "From 52W High": { def: "How far the current price is below the 52-week high, as a percentage.", effect: "A large drawdown (-30% or more) may indicate distress or opportunity depending on fundamentals." },
+  "Beta": { def: "Measures how much the stock moves relative to the S&P 500.", effect: "Beta > 1 means more volatile than the market. Beta < 1 means less volatile. Negative beta moves inversely." },
+  "Return 1W": { def: "Price return over the past 1 week.", effect: "Short-term momentum indicator. Not meaningful in isolation but useful for spotting recent trends." },
+  "Return 1M": { def: "Price return over the past 1 month.", effect: "Useful for gauging recent momentum. Negative returns may present buying opportunities in strong companies." },
+  "Return YTD": { def: "Price return from January 1st to today.", effect: "Puts current performance in annual context. Useful for comparing against benchmarks like the S&P 500." },
+  "Return 1Y": { def: "Price return over the past 52 weeks.", effect: "A key long-term performance metric. Consistent outperformance vs. the market is a positive signal." },
+  "RSI (14)": { def: "Relative Strength Index — measures momentum on a 0–100 scale using 14 periods.", effect: "Above 70 = potentially overbought (sell signal). Below 30 = potentially oversold (buy signal). 40–60 = neutral." },
+  "50-Day MA": { def: "The average closing price over the last 50 trading days.", effect: "Price above the 50-day MA is generally bullish. Below is bearish. Often used as a support/resistance level." },
+  "200-Day MA": { def: "The average closing price over the last 200 trading days.", effect: "The key long-term trend indicator. Price above = bull trend. Below = bear trend. Widely watched by institutions." },
+  "MA Signal": { def: "The relationship between the 50-day and 200-day moving averages.", effect: "Golden Cross (50 above 200) = bullish long-term signal. Death Cross (50 below 200) = bearish signal." },
+  "Dividend Yield": { def: "Annual dividend per share divided by current stock price.", effect: "Higher yield means more income. But very high yields (>8%) can signal financial stress or a dividend cut ahead." },
+  "Payout Ratio": { def: "Percentage of earnings paid out as dividends.", effect: "Below 60% is generally sustainable. Above 100% means dividends exceed earnings — potentially unsustainable." },
+  "Debt / Equity": { def: "Total debt divided by shareholders equity.", effect: "High D/E means more leverage and financial risk. Low D/E signals a stronger balance sheet. Context matters by industry." },
+  "Current Ratio": { def: "Current assets divided by current liabilities.", effect: "Above 1.5 = healthy liquidity. Below 1 = may struggle to meet short-term obligations." },
+};
+
+function InfoIcon({ label }) {
+  const info = DEFINITIONS[label];
+  if (!info) return null;
+  return (
+    <span className="info-wrap">
+      <span className="info-icon">i</span>
+      <span className="info-tip">
+        <strong>{label}</strong>
+        {info.def}
+        <span style={{display:"block",marginTop:6,color:"var(--accent)",fontSize:10,fontWeight:500}}>
+          📈 {info.effect}
+        </span>
+      </span>
+    </span>
+  );
 }
 
 // ── Chart Tooltip ─────────────────────────────────────────────────────────────
