@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const css = `
   @import url('https://fonts.cdnfonts.com/css/satoshi');
@@ -225,35 +225,31 @@ const ChartTooltip = ({ active, payload }) => {
 };
 
 // ── Chart Component ───────────────────────────────────────────────────────────
-function StockChart({ data, showMA50, showMA200, isUp }) {
+function StockChart({ data, showMA50, showMA200 }) {
   if (!data || data.length === 0) return null;
   const closes = data.map(d => d.close).filter(Boolean);
   if (!closes.length) return null;
-  const ma50Count = data.filter(d => d.ma50 != null).length;
-  const ma200Count = data.filter(d => d.ma200 != null).length;
   const priceMin = Math.min(...closes) * 0.983;
   const priceMax = Math.max(...closes) * 1.017;
-  const lineColor = isUp ? "#2db84d" : "#e8352a";
-  const gradId = isUp ? "gradUp" : "gradDown";
-
+  const up = closes[closes.length - 1] >= closes[0];
+  const color = up ? "#2db84d" : "#e8352a";
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <ComposedChart data={data} margin={{top:4,right:4,left:0,bottom:0}}>
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={fillColor} stopOpacity={0.15}/>
-            <stop offset="95%" stopColor={fillColor} stopOpacity={0}/>
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)"/>
-        <XAxis dataKey="date" tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
-        <YAxis domain={[priceMin,priceMax]} tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} tickFormatter={v=>"$"+v.toFixed(0)} width={52}/>
-        <Tooltip content={<ChartTooltip/>} cursor={{stroke:"rgba(255,255,255,0.1)",strokeWidth:1,strokeDasharray:"4 2"}}/>
-        <Area type="monotone" dataKey="close" stroke={lineColor} strokeWidth={2} fill={`url(#${gradId})`} dot={false}/>
-        {showMA50 && <Line type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={true}/>}
-        {showMA200 && <Line type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={true}/>}
-      </ComposedChart>
-    </ResponsiveContainer>
+    <AreaChart width={800} height={280} data={data} margin={{top:4,right:4,left:0,bottom:0}}
+      style={{width:"100%"}}>
+      <defs>
+        <linearGradient id="cgrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor={color} stopOpacity={0.15}/>
+          <stop offset="95%" stopColor={color} stopOpacity={0}/>
+        </linearGradient>
+      </defs>
+      <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)"/>
+      <XAxis dataKey="date" tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
+      <YAxis domain={[priceMin,priceMax]} tick={{fill:"#5a5a70",fontSize:10,fontFamily:"Satoshi"}} tickLine={false} axisLine={false} tickFormatter={v=>"$"+v.toFixed(0)} width={52}/>
+      <Tooltip content={<ChartTooltip/>} cursor={{stroke:"rgba(255,255,255,0.1)",strokeWidth:1,strokeDasharray:"4 2"}}/>
+      <Area type="monotone" dataKey="close" stroke={color} strokeWidth={2} fill="url(#cgrad)" dot={false}/>
+      {showMA50 && <Area type="monotone" dataKey="ma50" stroke="#f0a030" strokeWidth={1.5} fill="none" dot={false} strokeDasharray="4 3"/>}
+      {showMA200 && <Area type="monotone" dataKey="ma200" stroke="#3b8eea" strokeWidth={1.5} fill="none" dot={false} strokeDasharray="4 3"/>}
+    </AreaChart>
   );
 }
 
