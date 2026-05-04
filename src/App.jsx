@@ -240,13 +240,9 @@ function StockChart({ data, showMA50, showMA200, isUp }) {
     <ResponsiveContainer width="100%" height={280}>
       <ComposedChart data={data} margin={{top:4,right:4,left:0,bottom:0}}>
         <defs>
-          <linearGradient id="gradUp" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#2db84d" stopOpacity={0.15}/>
-            <stop offset="95%" stopColor="#2db84d" stopOpacity={0}/>
-          </linearGradient>
-          <linearGradient id="gradDown" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#e8352a" stopOpacity={0.15}/>
-            <stop offset="95%" stopColor="#e8352a" stopOpacity={0}/>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={fillColor} stopOpacity={0.15}/>
+            <stop offset="95%" stopColor={fillColor} stopOpacity={0}/>
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)"/>
@@ -525,13 +521,6 @@ export default function App() {
                   <button className={`ma-btn ${showMA200?"blue":""}`} onClick={()=>setShowMA200(v=>!v)} title={`MA200: ${chartData.filter(d=>d.ma200!=null).length} pts`}>MA 200</button>
                 </div>
               </div>
-
-              {/* Chart color debug */}
-              {chartData.length > 0 && (
-                <div style={{fontSize:11,color:"var(--tertiary)",marginBottom:6}}>
-                  Range: ${chartData[0]?.close?.toFixed(2)} → ${chartData[chartData.length-1]?.close?.toFixed(2)}
-                </div>
-              )}
 
               {/* Chart error */}
               {chartError && (
