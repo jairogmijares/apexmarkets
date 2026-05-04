@@ -97,9 +97,9 @@ const css = `
 
   .section { margin-bottom: 12px; }
   .section-title { font-size: 19px; font-weight: 600; letter-spacing: -0.3px; color: var(--text); margin-bottom: 10px; padding-left: 2px; }
-  .mgrid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1.5px; background: var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  .mgrid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1.5px; background: var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
   @media(max-width:720px){.mgrid{grid-template-columns:repeat(2,1fr)}}
-  .mcell { background: var(--white); padding: 18px 20px; transition: background 0.12s; }
+  .mcell { background: var(--white); padding: 18px 20px; transition: background 0.12s; overflow: visible; position: relative; }
   .mcell:hover { background: #1a1a22; }
   .mlbl { font-size: 10px; font-weight: 600; color: var(--tertiary); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; }
   .mval { font-size: 20px; font-weight: 400; letter-spacing: -0.5px; color: var(--text); margin-bottom: 3px; }
@@ -108,7 +108,7 @@ const css = `
   .info-wrap { position: relative; display: inline-flex; align-items: center; margin-left: 5px; vertical-align: middle; }
   .info-icon { width: 13px; height: 13px; border-radius: 50%; background: rgba(255,255,255,0.1); color: var(--tertiary); font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: default; flex-shrink: 0; transition: background 0.15s; line-height: 1; }
   .info-icon:hover { background: var(--accent-light); color: var(--accent); }
-  .info-tip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #1e1e2e; border: 1px solid var(--border-strong); border-radius: 10px; padding: 10px 13px; width: 220px; font-size: 11px; color: var(--secondary); line-height: 1.6; z-index: 100; pointer-events: none; opacity: 0; transition: opacity 0.15s; white-space: normal; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  .info-tip { position: fixed; background: #1e1e2e; border: 1px solid var(--border-strong); border-radius: 10px; padding: 10px 13px; width: 220px; font-size: 11px; color: var(--secondary); line-height: 1.6; z-index: 9999; pointer-events: none; opacity: 0; transition: opacity 0.15s; white-space: normal; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
   .info-tip strong { color: var(--text); display: block; margin-bottom: 4px; font-size: 11px; }
   .info-wrap:hover .info-tip { opacity: 1; }
   .mlbl-row { display: flex; align-items: center; margin-bottom: 8px; }
@@ -255,17 +255,31 @@ const DEFINITIONS = {
 
 function InfoIcon({ label }) {
   const info = DEFINITIONS[label];
+  const [pos, setPos] = useState(null);
   if (!info) return null;
+
+  const show = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setPos({ x: r.left + r.width/2, y: r.top });
+  };
+  const hide = () => setPos(null);
+
   return (
-    <span className="info-wrap">
+    <span className="info-wrap" onMouseEnter={show} onMouseLeave={hide}>
       <span className="info-icon">i</span>
-      <span className="info-tip">
-        <strong>{label}</strong>
-        {info.def}
-        <span style={{display:"block",marginTop:6,color:"var(--accent)",fontSize:10,fontWeight:500}}>
-          📈 {info.effect}
+      {pos && (
+        <span className="info-tip" style={{
+          left: Math.min(pos.x - 110, window.innerWidth - 230),
+          top: pos.y - 8,
+          transform: "translateY(-100%)",
+        }}>
+          <strong>{label}</strong>
+          {info.def}
+          <span style={{display:"block",marginTop:6,color:"var(--accent)",fontSize:10,fontWeight:500}}>
+            📈 {info.effect}
+          </span>
         </span>
-      </span>
+      )}
     </span>
   );
 }
