@@ -256,12 +256,10 @@ const DEFINITIONS = {
 function InfoIcon({ label }) {
   const info = DEFINITIONS[label];
   const [pos, setPos] = useState(null);
-  const ref = useRef(null);
   if (!info) return null;
 
-  const show = () => {
-    if (!ref.current) return;
-    const r = ref.current.getBoundingClientRect();
+  const show = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
     let x = r.right + 10;
     let y = r.top + r.height / 2;
     if (x + 224 > window.innerWidth - 8) x = r.left - 232;
@@ -269,8 +267,8 @@ function InfoIcon({ label }) {
   };
 
   return (
-    <span className="info-wrap" onMouseEnter={show} onMouseLeave={()=>setPos(null)}>
-      <span ref={ref} className="info-icon">i</span>
+    <span className="info-wrap">
+      <span className="info-icon" onMouseEnter={show} onMouseLeave={()=>setPos(null)}>i</span>
       {pos && (
         <span className="info-tip" style={{left:pos.x, top:pos.y, transform:"translateY(-50%)"}}>
           <strong>{label}</strong>
