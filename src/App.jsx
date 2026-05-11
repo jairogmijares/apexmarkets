@@ -256,23 +256,23 @@ const DEFINITIONS = {
 function InfoIcon({ label }) {
   const info = DEFINITIONS[label];
   const [pos, setPos] = useState(null);
+  const ref = useRef(null);
   if (!info) return null;
 
-  const show = (e) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setPos({ x: r.left + r.width/2, y: r.top });
+  const show = () => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    let x = r.right + 10;
+    let y = r.top + r.height / 2;
+    if (x + 224 > window.innerWidth - 8) x = r.left - 232;
+    setPos({ x, y });
   };
-  const hide = () => setPos(null);
 
   return (
-    <span className="info-wrap" onMouseEnter={show} onMouseLeave={hide}>
-      <span className="info-icon">i</span>
+    <span className="info-wrap" onMouseEnter={show} onMouseLeave={()=>setPos(null)}>
+      <span ref={ref} className="info-icon">i</span>
       {pos && (
-        <span className="info-tip" style={{
-          left: Math.min(pos.x - 110, window.innerWidth - 230),
-          top: pos.y - 8,
-          transform: "translateY(-100%)",
-        }}>
+        <span className="info-tip" style={{left:pos.x, top:pos.y, transform:"translateY(-50%)"}}>
           <strong>{label}</strong>
           {info.def}
           <span style={{display:"block",marginTop:6,color:"var(--accent)",fontSize:10,fontWeight:500}}>
