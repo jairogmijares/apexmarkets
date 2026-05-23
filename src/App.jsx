@@ -647,8 +647,7 @@ export default function App() {
             ))}
           </>
         )}
-      </div>
-        </>}
+      </>}
 
       {/* Screener Tab */}
       {tab === "screener" && (
