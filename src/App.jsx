@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import Screener from "./Screener";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const css = `
@@ -19,6 +20,9 @@ const css = `
   .app { max-width: 980px; margin: 0 auto; padding: 0 20px 80px; }
 
   .nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0 18px; }
+  .nav-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 3px; }
+  .nav-tab { font-size: 13px; font-weight: 500; color: var(--secondary); padding: 6px 16px; border-radius: 6px; cursor: pointer; border: none; background: transparent; font-family: var(--font); transition: all 0.14s; }
+  .nav-tab.active { background: var(--white); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
   .logo { font-size: 22px; letter-spacing: 0.3px; }
   .logo-apex { color: #e8352a; font-weight: 700; }
   .logo-markets { color: #2db84d; font-weight: 400; }
@@ -349,6 +353,7 @@ function Skeleton() {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
+  const [tab, setTab] = useState("analyzer");
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("apex_finnhub_key") || "");
   const [keyInput, setKeyInput] = useState("");
   const [inputVal, setInputVal] = useState("");
@@ -482,10 +487,17 @@ export default function App() {
         <div className="nav">
           <div className="logo"><span className="logo-apex">Apex</span><span className="logo-markets">Markets</span></div>
           <div className="nav-right">
+            <div className="nav-tabs">
+              <button className={`nav-tab ${tab==="analyzer"?"active":""}`} onClick={()=>setTab("analyzer")}>Analyzer</button>
+              <button className={`nav-tab ${tab==="screener"?"active":""}`} onClick={()=>setTab("screener")}>Screener</button>
+            </div>
             <span className={`market-status ${mktStatus.cls}`}>{mktStatus.label}</span>
             <span className="nav-date">{now}</span>
           </div>
         </div>
+
+        {/* Analyzer Tab */}
+        {tab === "analyzer" && <>
 
         {/* API Setup */}
         {!apiKey && (
@@ -636,6 +648,18 @@ export default function App() {
           </>
         )}
       </div>
+        </>}
+
+      {/* Screener Tab */}
+      {tab === "screener" && (
+        <Screener
+          apiKey={apiKey}
+          onSelectTicker={(sym) => {
+            setTab("analyzer");
+            go(sym);
+          }}
+        />
+      )}
     </>
   );
 }
