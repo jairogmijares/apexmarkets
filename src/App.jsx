@@ -499,54 +499,50 @@ export default function App() {
         {/* Analyzer Tab */}
         {tab === "analyzer" && <>
 
-        {/* API Setup */}
-        {!apiKey && (
-          <div className="api-setup">
-            <h3>🔑 Connect Finnhub API</h3>
-            <p>Get your free key at <a href="https://finnhub.io/register" target="_blank">finnhub.io/register</a> — no credit card needed.</p>
-            <div className="api-input-row">
-              <input className="api-input" placeholder="Paste your Finnhub API key…" value={keyInput} onChange={e=>setKeyInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveKey()}/>
-              <button className="api-btn" onClick={saveKey}>Connect</button>
+          {/* API Setup */}
+          {!apiKey && (
+            <div className="api-setup">
+              <h3>🔑 Connect Finnhub API</h3>
+              <p>Get your free key at <a href="https://finnhub.io/register" target="_blank">finnhub.io/register</a> — no credit card needed.</p>
+              <div className="api-input-row">
+                <input className="api-input" placeholder="Paste your Finnhub API key…" value={keyInput} onChange={e=>setKeyInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveKey()}/>
+                <button className="api-btn" onClick={saveKey}>Connect</button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Search */}
-        {apiKey && (
-          <div className="search-card">
-            <div className="search-row">
-              <input ref={inputRef} className="search-input" value={inputVal} onChange={e=>setInputVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go(inputVal)} placeholder="Ticker…" maxLength={6}/>
-              <button className="search-btn" onClick={()=>go(inputVal)} disabled={loading}>{loading?"Loading…":"Analyze"}</button>
+          {/* Search */}
+          {apiKey && (
+            <div className="search-card">
+              <div className="search-row">
+                <input ref={inputRef} className="search-input" value={inputVal} onChange={e=>setInputVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go(inputVal)} placeholder="Ticker…" maxLength={6}/>
+                <button className="search-btn" onClick={()=>go(inputVal)} disabled={loading}>{loading?"Loading…":"Analyze"}</button>
+              </div>
+              <div className="quick-row">
+                {recent.length>0&&<>
+                  <span className="quick-label">Recent:</span>
+                  {recent.map(t=><div key={t} className="q-pill recent" onClick={()=>go(t)}>{t}</div>)}
+                  <span className="quick-label" style={{marginLeft:4}}>|</span>
+                </>}
+                {QUICK.map(t=><div key={t} className="q-pill" onClick={()=>go(t)}>{t}</div>)}
+              </div>
             </div>
-            <div className="quick-row">
-              {recent.length>0&&<>
-                <span className="quick-label">Recent:</span>
-                {recent.map(t=><div key={t} className="q-pill recent" onClick={()=>go(t)}>{t}</div>)}
-                <span className="quick-label" style={{marginLeft:4}}>|</span>
-              </>}
-              {QUICK.map(t=><div key={t} className="q-pill" onClick={()=>go(t)}>{t}</div>)}
+          )}
+
+          {error && <div className="err-bar">⚠ {error}</div>}
+          {loading && <><div className="spin-wrap"><div className="spinner"/><div className="spin-label">{loadingMsg}</div></div><Skeleton/></>}
+
+          {!loading && !stockData && !error && apiKey && (
+            <div className="empty-card">
+              <div className="empty-icon">📊</div>
+              <div className="empty-t">Search any stock to begin</div>
+              <div className="empty-s">Enter a US-listed ticker above or tap a quick pick</div>
+              <div className="empty-tickers">{QUICK.map(t=><div key={t} className="empty-tick" onClick={()=>go(t)}>{t}</div>)}</div>
             </div>
-          </div>
-        )}
+          )}
 
-        {error && <div className="err-bar">⚠ {error}</div>}
-        {loading && <><div className="spin-wrap"><div className="spinner"/><div className="spin-label">{loadingMsg}</div></div><Skeleton/></>}
-
-        {/* Empty state */}
-        {!loading && !stockData && !error && apiKey && (
-          <div className="empty-card">
-            <div className="empty-icon">📊</div>
-            <div className="empty-t">Search any stock to begin</div>
-            <div className="empty-s">Enter a US-listed ticker above or tap a quick pick</div>
-            <div className="empty-tickers">{QUICK.map(t=><div key={t} className="empty-tick" onClick={()=>go(t)}>{t}</div>)}</div>
-          </div>
-        )}
-
-        {/* Stock view */}
-        {!loading && stockData && (
-          <>
+          {!loading && stockData && (<>
             <div className="hero fade d0">
-              {/* Header */}
               <div className="hero-top">
                 <div>
                   <div className="hero-ticker">{ticker}</div>
@@ -561,7 +557,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* OHLC */}
               <div className="ohlc-bar">
                 {[
                   {lbl:"Open",val:q.o!=null?"$"+fmtN(q.o):"—"},
@@ -578,7 +573,6 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Chart controls */}
               <div className="chart-controls">
                 <div className="range-group">
                   {RANGES.map((r,i)=>(
@@ -586,12 +580,11 @@ export default function App() {
                   ))}
                 </div>
                 <div className="ma-group">
-                  <button className={`ma-btn ${showMA50?"amber":""}`} onClick={()=>setShowMA50(v=>!v)} title={`MA50: ${chartData.filter(d=>d.ma50!=null).length} pts`}>MA 50</button>
-                  <button className={`ma-btn ${showMA200?"blue":""}`} onClick={()=>setShowMA200(v=>!v)} title={`MA200: ${chartData.filter(d=>d.ma200!=null).length} pts`}>MA 200</button>
+                  <button className={`ma-btn ${showMA50?"amber":""}`} onClick={()=>setShowMA50(v=>!v)}>MA 50</button>
+                  <button className={`ma-btn ${showMA200?"blue":""}`} onClick={()=>setShowMA200(v=>!v)}>MA 200</button>
                 </div>
               </div>
 
-              {/* Chart error */}
               {chartError && (
                 <div style={{textAlign:"center",padding:"12px 0",fontSize:13,color:"var(--amber)"}}>
                   ⚠ {chartError}
@@ -599,7 +592,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Chart */}
               {chartLoading ? (
                 <div style={{height:280,display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <div className="spinner"/>
@@ -608,7 +600,6 @@ export default function App() {
                 <StockChart data={chartData} showMA50={showMA50} showMA200={showMA200}/>
               )}
 
-              {/* Volume */}
               {chartData.some(d=>d.volume>0) && (
                 <div className="vol-wrap">
                   <div className="vol-label">Volume</div>
@@ -627,7 +618,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Metrics */}
             {sections.map(sec=>(
               <div key={sec.title} className={`section fade ${sec.delay}`}>
                 <div className="section-title">{sec.title}</div>
@@ -645,10 +635,11 @@ export default function App() {
                 </div>
               </div>
             ))}
-          </>
-        )}
+          </>)}
+
         </>}
 
+        {/* Screener Tab */}
         {tab === "screener" && (
           <Screener
             apiKey={apiKey}
@@ -658,6 +649,8 @@ export default function App() {
             }}
           />
         )}
+
+      </div>
     </>
   );
 }
