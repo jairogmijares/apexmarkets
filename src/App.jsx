@@ -647,18 +647,17 @@ export default function App() {
             ))}
           </>
         )}
-      </>}
+        </>}
 
-      {/* Screener Tab */}
-      {tab === "screener" && (
-        <Screener
-          apiKey={apiKey}
-          onSelectTicker={(sym) => {
-            setTab("analyzer");
-            go(sym);
-          }}
-        />
-      )}
+        {tab === "screener" && (
+          <Screener
+            apiKey={apiKey}
+            onSelectTicker={(sym) => {
+              setTab("analyzer");
+              go(sym);
+            }}
+          />
+        )}
     </>
   );
 }
