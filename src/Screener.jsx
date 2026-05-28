@@ -95,12 +95,21 @@ const fmtB = (n) => {
 const sgn = (n) => n > 0 ? "+" : "";
 
 const PRESETS = {
-  "🚀 Growth": { revGrowthMin: 15, profitMarginMin: 10, return1YMin: 20 },
-  "💎 Value": { peMin: 5, peMax: 20, epsMin: 1 },
-  "💰 Dividend": { dividendYieldMin: 2, profitMarginMin: 5 },
-  "📈 Momentum": { return1MMin: 5, return1YMin: 30 },
-  "🏔️ Near 52W High": { fromHighMax: -5 },
-  "🛡️ Low Risk": { betaMax: 0.8, profitMarginMin: 10 },
+  "📈 Long-Term": {
+    // Strong fundamentals, profitable, solid growth
+    peMin: 5, peMax: 40,
+    epsMin: 0,
+    profitMarginMin: 8,
+    return1YMin: 10,
+    betaMax: 2,
+    sortBy: "marketCap", sortDir: "desc"
+  },
+  "⚡ Swing Trade": {
+    // Momentum + recent strength, higher beta for movement
+    return1MMin: 3,
+    betaMax: 3,
+    sortBy: "return1M", sortDir: "desc"
+  },
 };
 
 const COLUMNS = [
