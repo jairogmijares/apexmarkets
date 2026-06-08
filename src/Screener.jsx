@@ -96,17 +96,16 @@ const sgn = (n) => n > 0 ? "+" : "";
 
 const PRESETS = {
   "📈 Long-Term": {
-    // Strong fundamentals, profitable, solid growth
-    peMin: 5, peMax: 40,
-    epsMin: 0,
-    profitMarginMin: 8,
-    return1YMin: 10,
-    betaMax: 2,
-    sortBy: "marketCap", sortDir: "desc"
+    peMin: 5, peMax: 50,
+    profitMarginMin: 5,
+    aboveMa200: true,
+    goldenCrossOnly: true,
+    sortBy: "return1Y", sortDir: "desc"
   },
   "⚡ Swing Trade": {
-    // Momentum + recent strength, higher beta for movement
-    return1MMin: 3,
+    aboveMa50: true,
+    rsiMin: 50, rsiMax: 70,
+    return1MMin: 2,
     betaMax: 3,
     sortBy: "return1M", sortDir: "desc"
   },
@@ -119,19 +118,22 @@ const COLUMNS = [
   { key: "changePct", label: "Chg %" },
   { key: "marketCap", label: "Mkt Cap" },
   { key: "peRatio", label: "P/E" },
-  { key: "eps", label: "EPS" },
-  { key: "revenueGrowth", label: "Rev Gr 3Y" },
   { key: "profitMargin", label: "Margin" },
+  { key: "rsi", label: "RSI" },
+  { key: "aboveMa50", label: "MA50" },
+  { key: "aboveMa200", label: "MA200" },
   { key: "return1M", label: "Ret 1M" },
   { key: "return1Y", label: "Ret 1Y" },
   { key: "beta", label: "Beta" },
 ];
 
 const DEFAULT_FILTERS = {
-  peMin: "", peMax: "", epsMin: "", revGrowthMin: "",
+  peMin: "", peMax: "", epsMin: "",
   profitMarginMin: "", marketCapMin: "", marketCapMax: "",
   betaMax: "", return1MMin: "", return1YMin: "",
   dividendYieldMin: "", fromHighMax: "",
+  aboveMa50: false, aboveMa200: false, goldenCrossOnly: false,
+  rsiMin: "", rsiMax: "",
   sortBy: "marketCap", sortDir: "desc",
 };
 
@@ -176,7 +178,6 @@ export default function Screener({ apiKey, onSelectTicker }) {
         peMin: numFilter(filters.peMin),
         peMax: numFilter(filters.peMax),
         epsMin: numFilter(filters.epsMin),
-        revGrowthMin: numFilter(filters.revGrowthMin),
         profitMarginMin: numFilter(filters.profitMarginMin),
         marketCapMin: filters.marketCapMin ? parseFloat(filters.marketCapMin) * 1e9 : null,
         marketCapMax: filters.marketCapMax ? parseFloat(filters.marketCapMax) * 1e9 : null,
@@ -185,6 +186,11 @@ export default function Screener({ apiKey, onSelectTicker }) {
         return1YMin: numFilter(filters.return1YMin),
         dividendYieldMin: numFilter(filters.dividendYieldMin),
         fromHighMax: numFilter(filters.fromHighMax),
+        rsiMin: numFilter(filters.rsiMin),
+        rsiMax: numFilter(filters.rsiMax),
+        aboveMa50: filters.aboveMa50 || false,
+        aboveMa200: filters.aboveMa200 || false,
+        goldenCrossOnly: filters.goldenCrossOnly || false,
         sortBy: sortKey,
         sortDir,
       };
@@ -197,6 +203,7 @@ export default function Screener({ apiKey, onSelectTicker }) {
       const data = await res.json();
       setResults(data.results || []);
       setScanned(data.scanned || 0);
+      if (data.debug) console.log('Screener debug:', JSON.stringify(data.debug));
     } catch(e) {
       setError(e.message || "Screener failed. Try again.");
     }
@@ -218,8 +225,15 @@ export default function Screener({ apiKey, onSelectTicker }) {
     if (key === "price") return <span className="price-cell">${fmt(v)}</span>;
     if (key === "changePct") return <span className={v >= 0 ? "chg-pos" : "chg-neg"}>{sgn(v)}{fmt(v, 2)}%</span>;
     if (key === "marketCap") return <span className="num-cell">{fmtB(v)}</span>;
-    if (key === "revenueGrowth" || key === "profitMargin" || key === "return1M" || key === "return1Y") {
+    if (key === "profitMargin" || key === "return1M" || key === "return1Y") {
       return <span className={v >= 0 ? "chg-pos" : "chg-neg"}>{sgn(v)}{fmt(v, 1)}%</span>;
+    }
+    if (key === "aboveMa50" || key === "aboveMa200") {
+      return <span style={{color: v ? "var(--green)" : "var(--red)", fontWeight:600}}>{v ? "✓" : "✗"}</span>;
+    }
+    if (key === "rsi") {
+      const color = v > 70 ? "var(--red)" : v < 30 ? "var(--green)" : "var(--text)";
+      return <span style={{color, fontWeight:500}}>{fmt(v,1)}</span>;
     }
     return <span className="num-cell">{fmt(v)}</span>;
   };
@@ -300,6 +314,37 @@ export default function Screener({ apiKey, onSelectTicker }) {
             </div>
           </div>
 
+          {/* Technical */}
+          <div className="filter-section-title" style={{marginTop:24}}>Technical</div>
+          <div className="filter-grid">
+            <div className="filter-item">
+              <label className="filter-label">RSI Min</label>
+              <input className="filter-input" type="number" placeholder="e.g. 40" value={filters.rsiMin} onChange={e=>setFilter("rsiMin",e.target.value)}/>
+            </div>
+            <div className="filter-item">
+              <label className="filter-label">RSI Max</label>
+              <input className="filter-input" type="number" placeholder="e.g. 70" value={filters.rsiMax} onChange={e=>setFilter("rsiMax",e.target.value)}/>
+            </div>
+            <div className="filter-item" style={{justifyContent:"flex-end",paddingTop:20}}>
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--secondary)"}}>
+                <input type="checkbox" checked={filters.aboveMa50} onChange={e=>setFilter("aboveMa50",e.target.checked)} style={{width:15,height:15,accentColor:"var(--amber)"}}/>
+                Price Above MA 50
+              </label>
+            </div>
+            <div className="filter-item" style={{justifyContent:"flex-end",paddingTop:20}}>
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--secondary)"}}>
+                <input type="checkbox" checked={filters.aboveMa200} onChange={e=>setFilter("aboveMa200",e.target.checked)} style={{width:15,height:15,accentColor:"var(--accent)"}}/>
+                Price Above MA 200
+              </label>
+            </div>
+            <div className="filter-item" style={{justifyContent:"flex-end",paddingTop:4}}>
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"var(--secondary)"}}>
+                <input type="checkbox" checked={filters.goldenCrossOnly} onChange={e=>setFilter("goldenCrossOnly",e.target.checked)} style={{width:15,height:15,accentColor:"var(--green)"}}/>
+                Golden Cross Only
+              </label>
+            </div>
+          </div>
+
           {/* Sort */}
           <div className="filter-section-title" style={{marginTop:24}}>Sort Results By</div>
           <div className="filter-grid">
@@ -337,12 +382,13 @@ export default function Screener({ apiKey, onSelectTicker }) {
         </div>
 
         {error && <div style={{background:"var(--red-bg)",color:"var(--red)",borderRadius:"var(--radius-sm)",padding:"12px 18px",fontSize:13,fontWeight:500,marginBottom:12}}>⚠ {error}</div>}
+        {results && results.length === 0 && scanned > 0 && <div style={{background:"var(--amber-bg)",color:"var(--amber)",borderRadius:"var(--radius-sm)",padding:"12px 18px",fontSize:12,marginBottom:12}}>Scanned {scanned} stocks, 0 matched. Try loosening filters or using no filters to test.</div>}
 
         {loading && (
           <div className="screener-loading">
             <div className="screener-loading-label">Scanning the market…</div>
             <div className="screener-progress"><div className="screener-progress-bar"/></div>
-            <div className="screener-loading-sub">Fetching data for ~150 stocks. This takes about 30 seconds.</div>
+            <div className="screener-loading-sub">Fetching data for 40 stocks including live technical indicators.</div>
           </div>
         )}
 
