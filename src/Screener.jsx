@@ -194,10 +194,12 @@ export default function Screener({ apiKey, onSelectTicker }) {
         sortBy: sortKey,
         sortDir,
       };
+      const payload = JSON.stringify({ key: apiKey.trim(), filters: f });
+      console.log("Sending to screener, key length:", apiKey.trim().length, "payload length:", payload.length);
       const res = await fetch("/api/screener", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: apiKey, filters: f }),
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: payload,
       });
       if (!res.ok) throw new Error("Screener error " + res.status);
       const data = await res.json();
