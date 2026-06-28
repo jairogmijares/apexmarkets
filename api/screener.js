@@ -6,17 +6,11 @@ const TICKERS = [
   "NOW","PLTR","COIN","DDOG","SNOW","NET","CELH","SQ","PYPL","UBER"
 ];
 
-export const config = { api: { bodyParser: true } };
-
-function fhGet(url) {
-  const https = require("https");
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      let data = "";
-      res.on("data", c => data += c);
-      res.on("end", () => { try { resolve(JSON.parse(data)); } catch(e) { resolve({}); } });
-    }).on("error", e => resolve({}));
-  });
+async function fhGet(url) {
+  try {
+    const res = await globalThis.fetch(url);
+    return await res.json();
+  } catch(e) { return {}; }
 }
 
 export default async function handler(req, res) {
@@ -75,7 +69,7 @@ export default async function handler(req, res) {
 
   const filtered = results.filter(s => {
     if (!s) return false;
-    const chk = (v, mn, mx) => { if (v==null) return true; if (mn!=null&&v<mn) return false; if (mx!=null&&v>mx) return false; return true; };
+    const chk = (v,mn,mx) => { if(v==null)return true; if(mn!=null&&v<mn)return false; if(mx!=null&&v>mx)return false; return true; };
     if (!chk(s.peRatio, f.peMin, f.peMax)) return false;
     if (f.epsMin!=null && s.eps!=null && s.eps<f.epsMin) return false;
     if (f.revGrowthMin!=null && s.revenueGrowth!=null && s.revenueGrowth<f.revGrowthMin) return false;
@@ -89,11 +83,11 @@ export default async function handler(req, res) {
     return true;
   });
 
-  const sb = f.sortBy || "marketCap", sd = f.sortDir || "desc";
+  const sb = f.sortBy||"marketCap", sd = f.sortDir||"desc";
   filtered.sort((a,b) => { const av=a[sb]??(sd==="desc"?-Infinity:Infinity), bv=b[sb]??(sd==="desc"?-Infinity:Infinity); return sd==="desc"?bv-av:av-bv; });
 
   res.status(200).json({
     results: filtered, total: filtered.length, scanned: results.length,
-    debug: { keyLen: key.length, raw: results.length, errs: errs.slice(0,5), first: results[0]||null }
+    debug: { keyLen: key.length, raw: results.length, errs: errs.slice(0,3), first: results[0]||null }
   });
 }
